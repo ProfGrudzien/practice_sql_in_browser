@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Entrainement au langage SQL</title>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 12pt;
+            background-color: white;
+        }
+        #requete {
+            border: 1px solid black;
+            resize: none;
+            width: 590px;
+            margin: 0px;
+            font-size: 12pt;
+            padding: 4px;
+        }
+        #requete-container {
+            text-align: center;
+            width: 600px;
+            margin: 2px auto;
+            padding: 0px
+        }
+        #reponse-container {
+            background-color: black;
+            color: white;
+            width: 600px;
+            height: 500px;
+            margin: 2px auto;
+            padding: 0px;
+        }
+        #reponse {
+            margin: 0px;
+            padding: 4px;
+            height: 100%;
+            width: 100%;
+            overflow: scroll;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="reponse-container">
+        <p id="reponse"></p>
+    </div>
+    <form id="requete-container">
+        <textarea id="requete" rows=3></textarea>
+        <input type="submit" value="Envoyer la requête." />
+    </form>
+    <script language="javascript">
+        const mainKeywords = {
+            "SHOW": show,
+            "USE": use,
+            "DESC": describe,
+            "DESCRIBE": describe,
+            "SELECT": select,
+            "INSERT": unimplemented,
+            "UPDATE": unimplemented,
+            "DELETE": unimplemented,
+            "MERGE": unimplemented,
+            "TRUNCATE": unimplemented,
+            "CREATE": unimplemented,
+            "DROP": unimplemented,
+            "ALTER": unimplemented,
+            "RENAME": unimplemented,
+        }
+        const databases = []
+        var currentDatabase = null
+        class Database {
+            constructor(nom) {
+                this.nom = nom
+                this.tables = {}
+            }
+            addTable(nom, base) {
+                if (this.tables[nom]) {
+                    console.log(`La base "${this.nom}" comporte déjà une table nomée "${nom}"`)
+                } else {
+                    this.tables[nom] = new Table(nom, this)
+                }
+            }
+        }
+        class Table {
+            constructor(nom, base) {
+                this.nom = nom
+                this.columns = {}
+                this.data = []
+                this.base = base
+            }
+            addColumn(nom, type) {
+                if (this.columns[nom]) {
+                    console.log(`La table "${this.nom}" comporte déjà une colonne nomée "${nom}".`)
+                } else {
+                    this.columns[nom] = new Column(nom, type, this)
+                }
+            }
+            addData(element) {
+                const colonneInconnue = Object.keys(element).filter(key => !this.columns[key])
+                if (colonneInconnue.length == 1) {
+                    console.log(`La table "${this.nom}" ne comporte pas de colonne "${colonneInconnue[0]}".`)
+                } else if (colonneInconnue.length > 1) {
+                    console.log(`La table "${this.nom}" ne comporte pas de colonnes "${colonneInconnue.join(', ')}".`)
+                } else {
+                    this.data.push(element)
+                    for (const key in element) {
+                        const newLength = element[key].toString().length
+                        const column = this.columns[key]
+                        if (column.maxLength < newLength) {
+                            column.maxLength = newLength
+                        }
+                    }
+                }
+            }
+        }
+        class Column {
+            constructor(nom, type, table) {
+                this.type = type
+                this.nom = nom
+                this.table = table
+                this.maxLength = nom.length
+            }
+        }
+        class SearchColumn {
+            constructor(nom) {
+                const liste = nom.split(".")
+                this.nom = nom
+                this.alias = nom
+                this.dbColumn = null
+                this.table = null
+                if (liste.length == 2) {
+                    this.nom = liste[1]
+                    this.table = liste[0]
+                }
+            }
+        }
+        class SearchTable {
+            constructor(nom) {
+                this.nom = nom
+                this.alias = nom
+                this.dbTable = null
+            }
+        }
+        /*
+         * produit cartésien d'une liste de n listes
+         */
+        function produitCartesien(L) {
+            return L.reduce((acc, cur) => {
+                var rep = []
+                if (acc.length) {
+                    for (i=0; i<acc.length; i++) {
+                        for (j=0; j<cur.length; j++) {
+                            rep.push(acc[i].concat([cur[j]]))
+                        }
+                    }
+                } else {
+                    rep = cur.map(elem => [elem])
+                }
+                return rep
+            }, [])
+        }
+        /*
+         * vérifie que le nom ne comporte que des lettres, des chiffres et/ou le caractère _
+         */
+        function checkName(nom) {
+            const regex = /^\w+$/g
+            if (regex.test(nom)) {
+                return true
+            } else {
+                print(`Le nom "${nom}" contient des caractères interdits`)
+                return false
+            }
+        }
+        /*
+         * ajoute autant d'espace que necessaire pour obtenir une chaine de bonne longueur.
+         * si le texte est trop long, retourne le texte tel quel.
+         */
+        function expandText(texte, longueur) {
+            if (longueur>=texte.length) {
+                return texte + "&nbsp;".repeat(longueur-texte.length)
+            } else {
+                return texte
+            }
+        }
+        /*
+         * affiche une ligne dans le cadre 'réponse'
+         */
+        function print(texte) {
+            const p = document.getElementById("reponse")
+            p.innerHTML += texte+"<br/>"
+            p.scrollTop = p.scrollHeight;
+        }
+        /*
+         * affiche des données sous la forme d'un tableau dans le cadre 'réponse'
+         */
+        function printTable(data, largeurs) {
+            const entete = data[0]
+            for (i=0; i<entete.length; i++) {
+                if (largeurs[i] < entete[i].toString().length) {
+                    largeurs[i] = entete[i].toString().length
+                }
+            }
+            const ligne = "+" + largeurs.map(l => '-'.repeat(l+2)).join("+") + "+"
+            print(ligne)
+            data.forEach(row => {
+                print("| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
+                print(ligne)
+            })
+            print(`${data.length-1} ${data.length>2?"lignes":"ligne"}`)
+        }
+        /*
+         * vérifie que le mot clé de 'requete' à la position 'index' est dans 'dictionnaire'
+         */
+        function checkKeyword(requete, index, dictionnaire) {
+            if (requete.length > index) {
+                const keyword = requete[index].toUpperCase()
+                if (dictionnaire[keyword]) {
+                    dictionnaire[keyword](requete, index)
+                } else {
+                    print(`Mot clé "${keyword}" inattendu`)
+                }
+            } else {
+                print("Requete incomplète")
+            }
+        }
+        /*
+         * traite le mot-clé mysql 'SHOW'
+         */
+        function show(requete, index) {
+            const nextKeywords = {
+                "DATABASES": showDatabases,
+                "TABLES": showTables
+            }
+            checkKeyword(requete, index+1, nextKeywords)
+        }
+        /*
+         * traite la commande mysql 'SHOW DATABASES'
+         */
+        function showDatabases(requete, index) {
+            const dblist = databases.map(db => [db.nom])
+            const largeur = Math.max(...dblist.map(nom => nom.toString().length))
+            dblist.unshift(["DATABASES"])
+            printTable(dblist, [largeur])
+        }
+        /*
+         * traite la commande mysql 'SHOW TABLES'
+         */
+        function showTables(requete, index) {
+            if (currentDatabase) {
+                const tablesList = Object.keys(currentDatabase.tables).map(nom => [nom])
+                const largeur = Math.max(...tablesList.map(L => L[0].length))
+                tablesList.unshift([`TABLES in ${currentDatabase.nom}`])
+                printTable(tablesList, [largeur])
+            } else {
+                print("Aucune base de données sélectionnée")
+            }
+        }
+        /*
+         * traite la commande mysql 'USE'
+         */
+        function use(requete, index) {
+            if (requete.length > index + 1) {
+                const nom = requete[index+1]
+                if (checkName(nom)) {
+                    dbList = databases.filter(db => db.nom.toUpperCase() == nom.toUpperCase())
+                    if (dbList.length) {
+                        currentDatabase = dbList[0]
+                        print(`La base de données "${nom}" a bien été selectionnée.`)
+                    } else {
+                        print(`Erreur, il n'y a aucune base de données nomée "${nom}".`)
+                    }
+                }
+            } else {
+                print("Requete incomplète")
+            }
+        }
+        /*
+         * traite la commande mysql 'DESCRIBE'
+         */
+        function describe(requete, index) {
+            if (currentDatabase) {
+                const db = currentDatabase
+                if (requete.length > index + 1) {
+                    const nom = requete[index+1]
+                    if (db.tables[nom]) {
+                        const infos = Object.values(db.tables[nom].columns).map(lbl => [lbl.nom, lbl.type])
+                        const largeurs = [Math.max(...infos.map(L => L[0].length)),
+                                          Math.max(...infos.map(L => L[1].length))]
+                        infos.unshift(["COLUMN'S NAME", "TYPE"])
+                        printTable(infos, largeurs)
+                    } else {
+                        print(`Erreur, il n'y a aucune table nomée "${nom}" dans la base de données ${db.nom}.`)
+                    }
+                } else {
+                    print("Requete incomplète")
+                }
+            } else {
+                print("Aucune base de données sélectionnée")
+            }
+        }
+        /*
+         * recherche (récursivement) le nom des colonnes à afficher pour un SELECT FROM
+         */
+        function exploreColumns(requete, index, columnsList) {
+            if (requete.length > index+2 && requete[index+2] == ',') {
+                columnsList.push(new SearchColumn(requete[index+1]))
+                return exploreColumns(requete, index+2, columnsList)
+            } else if (requete.length > index+1) {
+                columnsList.push(new SearchColumn(requete[index+1]))
+                return [true, index+1, columnsList]
+            } else {
+                return [false, index, columnsList]
+            }
+        }
+        /*
+         * recherche (récursivement) le nom des sources de données et eventuellement les alias avant de faire un SELECT FROM
+         */
+        function exploreTables(requete, index, tablesList) {
+            if (requete.length > index+2 && requete[index+2] == ',') {
+                tablesList.push(new SearchTable(requete[index+1]))
+                return exploreTables(requete, index+2, tablesList)
+            } else if (requete.length > index+1) {
+                tablesList.push(new SearchTable(requete[index+1]))
+                return [true, index+1, tablesList]
+            } else {
+                return [false, index, tablesList]
+            }
+        }
+        /*
+         * retrouve les tables utilisées afin de faire un SELECT FROM
+         */
+        function checkSelectFrom(columnsList, tablesList) {
+            const db = currentDatabase
+            const searchTablesName = tablesList.map(table => table.nom)
+            const searchTablesAlias = tablesList.map(table => table.alias)
+            const searchTablesAll = searchTablesName.concat(searchTablesAlias);
+            const allColumns = []
+            var valide = true
+            /* vérification des tables */
+            tablesList.forEach(t => {
+                if (db.tables[t.nom]) {
+                    t.dbTable = db.tables[t.nom]
+                    Array.prototype.push.apply(allColumns, Object.values(db.tables[t.nom].columns));
+                } else {
+                    print(`La table "${table.nom}" n'existe pas dans la base de données "${currentDatabase.nom}"`)
+                    valide = false
+                }
+            })
+            /* vérification des colonnes */
+            if (valide) {
+                columnsList.forEach(col => {
+                    if (col.table) {
+                        const tableIndex = searchTablesAll.indexOf(col.table)
+                        if (tableIndex > -1) {
+                            const table = searchTablesAll[tableIndex].dbTable
+                            if (table[col.nom]) {
+                                col.table = table
+                                col.dbColumn = table[col.nom]
+                            } else {
+                                print(`La colonne "${col.nom}" n'existe pas dans la table "${table.nom}"`)
+                            }
+                        } else {
+                            print(`La table "${col.table}" n'existe pas dans la base de données "${currentDatabase.nom}"`)
+                            valide = false
+                        }
+                    } else {
+                        const columns = allColumns.filter(c => c.nom == col.nom)
+                        if (columns.length == 1) {
+                            col.dbColumn = columns[0]
+                            col.table = columns[0].table
+                        } else if (columns.length > 1) {
+                            print(`Le nom de colonne "${col.nom}" est présent dans plusieurs tables proposées`)
+                            valide = false
+                        } else {
+                            print(`Le nom de colonne "${col.nom}" n'est présent dans aucune table proposée`)
+                            valide = false
+                        }
+                    }
+                })
+            }
+            return [valide, columnsList, tablesList]
+        }
+        /*
+         * traite le mot-clé mysql 'SELECT'
+         */
+        function select(requete, index) {
+            if (requete.length > index + 1) {
+                if (requete[index+1].toUpperCase() == "DATABASE") {
+                    selectDatabase(requete, index + 1)
+                } else if (currentDatabase) {
+                    selectFrom(requete, index)
+                } else {
+                    print("Aucune base de données sélectionnée")
+                }
+            } else {
+                print("Requete incomplète")
+            }    
+        }
+        /*
+         * traite la commande mysql 'SELECT database()'
+         */
+        function selectDatabase(requete, index) {
+            if (requete.length > index+2) {
+                if (requete[index+1] == "(" && requete[index+2] == ")") {
+                    if (currentDatabase) {
+                        print(`La base de données "${currentDatabase.nom}" est actuellement selectionnée.`)
+                    } else {
+                        print("Aucune base de données n'est sélectionnée")
+                    }
+                } else {
+                    print("Erreur de syntaxe")
+                }
+            } else {
+                print("Requete incomplète")
+            }
+        }
+        /*
+         * traite la commande mysql 'SELECT FROM'
+         */
+        function selectFrom(requete, index) {
+            const db = currentDatabase
+            const keywords = {
+                "WHERE": unimplemented,
+                "GROUP BY": unimplemented,
+                "HAVING": unimplemented,
+                "ORDER BY": unimplemented,
+                "LIMIT": unimplemented,
+            }
+            var valide, columnsList, tablesList
+            [valide, index, columnsList] = exploreColumns(requete, index, [])
+            if (valide) {
+                if (requete.length > index+1 && requete[index+1].toUpperCase() == 'FROM') {
+                    [valide, index, tablesList] = exploreTables(requete, index+1, [])
+                    if (valide) {
+                        [valide, columnsList, tablesList] = checkSelectFrom(columnsList, tablesList)
+                    }
+                    if (valide) {
+                        if (requete.length > index+1) {
+                            print("to be continued")
+                        }
+                        else {
+                            const entete = columnsList.map(col => col.alias)
+                            const largeurs = columnsList.map(col => col.dbColumn.maxLength)
+                            const combinaisons = produitCartesien(tablesList.map(t => t.dbTable.data))
+                            const keepIndex = columnsList.map(col => [tablesList.map(t => t.dbTable).indexOf(col.table), col.nom])
+                            const data = combinaisons.map(elem => keepIndex.map(L => elem[L[0]][L[1]]))
+                            data.unshift(entete)
+                            printTable(data, largeurs)
+                        }
+                    } else {
+                        print("erreur de syntaxe")
+                    }
+                } else {
+                    print(`Requete incomplète`)
+                }
+            }
+        }
+        /*
+         * retourne un message indiquant que la commande mysql est non implémentée
+         */
+        function unimplemented(requete, index) {
+            print(`La commande "${requete[index]}" n'est pas implémentée pour le moment.`)
+        }
+        /*
+         * interprete la commande mysql saisie dans le champ de texte requete
+         */
+        function interpreter(event) {
+            event.preventDefault()
+            const originalReq = document.getElementById("requete").value
+            var req = originalReq
+            req = req.replace(/(\r\n|\n\r|\r|\n)/g, " ")
+            const listChar = ["(", ")", ";", ","]
+            listChar.forEach(char => req = req.split(char).join(" "+char+" "))
+            requete = req.split(" ").filter(term => term != "")
+            print('<font style="color: #00ff00">> ' + originalReq + "</font>")
+            console.log(requete)
+            checkKeyword(requete, 0, mainKeywords)
+        }
+        document.getElementById("requete-container").addEventListener("submit", interpreter)
+        
+        /*
+         * un exemple de database sur les sériers et acteurs des Emmy Awards 2018
+         */
+        const db_emmy = new Database("emmy18")
+        db_emmy.addTable("series")
+        db_emmy.tables["series"].addColumn("id", "SMALLINT")
+        db_emmy.tables["series"].addColumn("nom", "VARCHAR")
+        db_emmy.tables["series"].addColumn("diffuseur", "VARCHAR")
+        db_emmy.tables["series"].addData({id: 1, nom: "Game of Thrones", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 2, nom: "The Americans", diffuseur: "FX"})
+        db_emmy.tables["series"].addData({id: 3, nom: "The Crown", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 4, nom: "The Handmaid's Tale : La Servante écarlate", diffuseur: "Hulu"})
+        db_emmy.tables["series"].addData({id: 5, nom: "Stranger Things", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 6, nom: "This Is Us", diffuseur: "NBC"})
+        db_emmy.tables["series"].addData({id: 7, nom: "Westworld", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 8, nom: "Ozark", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 9, nom: "Orphan Black", diffuseur: "BBC America"})
+        db_emmy.tables["series"].addData({id: 10, nom: "Killing Eve", diffuseur: "BBC America"})
+        db_emmy.tables["series"].addData({id: 11, nom: "Homeland", diffuseur: "Showtime"})
+        db_emmy.tables["series"].addData({id: 12, nom: "Mme Maisel, femme fabuleuse", diffuseur: "Amazon"})
+        db_emmy.tables["series"].addData({id: 13, nom: "Atlanta", diffuseur: "FX"})
+        db_emmy.tables["series"].addData({id: 14, nom: "Barry", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 15, nom: "Black-ish", diffuseur: "ABC"})
+        db_emmy.tables["series"].addData({id: 16, nom: "Larry et son nombril", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 17, nom: "GLOW", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 18, nom: "Silicon Valley", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 19, nom: "Unbreakable Kimmy Schmidt", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 20, nom: "The Good Place", diffuseur: "NBC"})
+        db_emmy.tables["series"].addData({id: 21, nom: "Shameless", diffuseur: "Showtime"})
+        db_emmy.tables["series"].addData({id: 22, nom: "Better Things", diffuseur: "FX"})
+        db_emmy.tables["series"].addData({id: 23, nom: "Mom", diffuseur: "CBS"})
+        db_emmy.tables["series"].addData({id: 24, nom: "Insecure", diffuseur: "HBO"})
+        db_emmy.tables["series"].addData({id: 25, nom: "Grace et Frankie", diffuseur: "Netflix"})
+        db_emmy.tables["series"].addData({id: 26, nom: "Baskets", diffuseur: "FX"})
+        db_emmy.tables["series"].addData({id: 27, nom: "Roseanne", diffuseur: "ABC"})
+        db_emmy.tables["series"].addData({id: 28, nom: "Will et Grace", diffuseur: "NBC"})
+
+        db_emmy.addTable("acteurs")
+        db_emmy.tables["acteurs"].addColumn("id", "SMALLINT")
+        db_emmy.tables["acteurs"].addColumn("nom", "VARCHAR")
+        db_emmy.tables["acteurs"].addColumn("prenom", "VARCHAR")
+        db_emmy.tables["acteurs"].addColumn("sexe", "CHAR(1)")
+        db_emmy.tables["acteurs"].addColumn("pays", "VARCHAR")
+        db_emmy.tables["acteurs"].addColumn("date_de_naissance", "DATE")
+        db_emmy.tables["acteurs"].addData({id: 1, nom: "Rhys", prenom: "Matthew", sexe: "M", pays: "Pays de Galles", date_de_naissance: "1974-11-08"})
+        db_emmy.tables["acteurs"].addData({id: 2, nom: "Bateman", prenom: "Jason", sexe: "M", pays: "États-Unis", date_de_naissance: "1969-01-14"})
+        db_emmy.tables["acteurs"].addData({id: 3, nom: "Brown", prenom: "Sterling K.", sexe: "M", pays: "États-Unis", date_de_naissance: "1976-04-05"})
+        db_emmy.tables["acteurs"].addData({id: 4, nom: "Harris", prenom: "Ed", sexe: "M", pays: "États-Unis", date_de_naissance: "1950-11-28"})
+        db_emmy.tables["acteurs"].addData({id: 5, nom: "Ventimiglia", prenom: "Milo", sexe: "M", pays: "États-Unis", date_de_naissance: "1977-07-08"})
+        db_emmy.tables["acteurs"].addData({id: 6, nom: "Wright", prenom: "Jeffrey", sexe: "M", pays: "États-Unis", date_de_naissance: "1965-12-07"})
+        db_emmy.tables["acteurs"].addData({id: 7, nom: "Foy", prenom: "Claire", sexe: "F", pays: "Angleterre", date_de_naissance: "1984-04-16"})
+        db_emmy.tables["acteurs"].addData({id: 8, nom: "Maslany", prenom: "Tatiana", sexe: "F", pays: "Canada", date_de_naissance: "1985-09-22"})
+        db_emmy.tables["acteurs"].addData({id: 9, nom: "Moss", prenom: "Elisabeth", sexe: "F", pays: "États-Unis", date_de_naissance: "1982-07-24"})
+        db_emmy.tables["acteurs"].addData({id: 10, nom: "Oh", prenom: "Sandra", sexe: "F", pays: "Canada", date_de_naissance: "1970-11-30"})
+        db_emmy.tables["acteurs"].addData({id: 11, nom: "Russell", prenom: "Keri", sexe: "F", pays: "États-Unis", date_de_naissance: "1976-03-23"})
+        db_emmy.tables["acteurs"].addData({id: 12, nom: "Wood", prenom: "Evan Rachel", sexe: "F", pays: "États-Unis", date_de_naissance: "1987-09-07"})
+        db_emmy.tables["acteurs"].addData({id: 13, nom: "Dinklage", prenom: "Peter", sexe: "M", pays: "États-Unis", date_de_naissance: "1969-06-11"})
+        db_emmy.tables["acteurs"].addData({id: 14, nom: "Coster-Waldau", prenom: "Nikolaj", sexe: "M", pays: "Danemark", date_de_naissance: "1970-07-27"})
+        db_emmy.tables["acteurs"].addData({id: 15, nom: "Fiennes", prenom: "Joseph", sexe: "M", pays: "Angleterre", date_de_naissance: "1970-05-27"})
+        db_emmy.tables["acteurs"].addData({id: 16, nom: "Harbour", prenom: "David", sexe: "M", pays: "États-Unis", date_de_naissance: "1975-04-10"})
+        db_emmy.tables["acteurs"].addData({id: 17, nom: "Patinkin", prenom: "Mandy", sexe: "M", pays: "États-Unis", date_de_naissance: "1952-11-30"})
+        db_emmy.tables["acteurs"].addData({id: 18, nom: "Smith", prenom: "Matthew", sexe: "M", pays: "Angleterre", date_de_naissance: "1982-10-28"})
+        db_emmy.tables["acteurs"].addData({id: 19, nom: "Newton", prenom: "Thandie", sexe: "F", pays: "Angleterre", date_de_naissance: "1972-11-06"})
+        db_emmy.tables["acteurs"].addData({id: 20, nom: "Bledel", prenom: "Alexis", sexe: "F", pays: "États-Unis", date_de_naissance: "1981-09-16"})
+        db_emmy.tables["acteurs"].addData({id: 21, nom: "Brown", prenom: "Millie Bobby", sexe: "F", pays: "Espagne", date_de_naissance: "2004-02-19"})
+        db_emmy.tables["acteurs"].addData({id: 22, nom: "Dowd", prenom: "Ann", sexe: "F", pays: "États-Unis", date_de_naissance: "1956-01-30"})
+        db_emmy.tables["acteurs"].addData({id: 23, nom: "Heady", prenom: "Lena", sexe: "F", pays: "Royaume-Uni", date_de_naissance: "1973-10-03"})
+        db_emmy.tables["acteurs"].addData({id: 24, nom: "Kirby", prenom: "Vanessa", sexe: "F", pays: "Angleterre", date_de_naissance: "1988-04-18"})
+        db_emmy.tables["acteurs"].addData({id: 25, nom: "Strahovski", prenom: "Yvonne", sexe: "F", pays: "Australie", date_de_naissance: "1982-07-30"})
+
+        db_emmy.addTable("tourne")
+        db_emmy.tables["tourne"].addColumn("id_acteur", "SMALLINT")
+        db_emmy.tables["tourne"].addColumn("id_film", "SMALLINT")
+        db_emmy.tables["tourne"].addColumn("role", "VARCHAR")
+        db_emmy.tables["tourne"].addData({id_acteur: 1, id_film: 2, role: "Philip Jennings"})
+        db_emmy.tables["tourne"].addData({id_acteur: 2, id_film: 8, role: 'Martin "Marty" Byrde'})
+        db_emmy.tables["tourne"].addData({id_acteur: 3, id_film: 6, role: "Randall Pearson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 4, id_film: 7, role: "l'homme en noir"})
+        db_emmy.tables["tourne"].addData({id_acteur: 5, id_film: 6, role: "Jack Pearson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 6, id_film: 7, role: "Bernard Lowe"})
+        db_emmy.tables["tourne"].addData({id_acteur: 7, id_film: 3, role: "Élisabeth II"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Sarah Manning"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Elizabeth « Beth » Childs"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Cosima Niehaus"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Alison Hendrix"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Helena"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Rachel Duncan"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Katja Obinger"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Danielle Fournier"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Aryanna Giordano"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Janika Zingler"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Jennifer Fitzsimmons"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Tony Sawicki"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Krystal Goderitch"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "MK (Veera Suominen)"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Niki"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Miriam Johnson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Camilla Torres"})
+        db_emmy.tables["tourne"].addData({id_acteur: 9, id_film: 4, role: "June Osborne-Offred"})
+        db_emmy.tables["tourne"].addData({id_acteur: 10, id_film: 10, role: "Eve Polastri"})
+        db_emmy.tables["tourne"].addData({id_acteur: 11, id_film: 2, role: "Elizabeth Jennings"})
+        db_emmy.tables["tourne"].addData({id_acteur: 12, id_film: 7, role: "Dolores Abernathy"})
+        db_emmy.tables["tourne"].addData({id_acteur: 13, id_film: 1, role: "Tyrion Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 14, id_film: 1, role: "Jaime Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 15, id_film: 4, role: "Fred Waterford"})
+        db_emmy.tables["tourne"].addData({id_acteur: 16, id_film: 5, role: "Jim Hopper"})
+        db_emmy.tables["tourne"].addData({id_acteur: 17, id_film: 11, role: "Saul Berenson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 18, id_film: 3, role: "Prince Philip"})
+        db_emmy.tables["tourne"].addData({id_acteur: 19, id_film: 7, role: "Maeve Millay"})
+        db_emmy.tables["tourne"].addData({id_acteur: 20, id_film: 4, role: "Emily"})
+        db_emmy.tables["tourne"].addData({id_acteur: 21, id_film: 5, role: "Jane Ives / Onze"})
+        db_emmy.tables["tourne"].addData({id_acteur: 22, id_film: 4, role: "Tante Lydia"})
+        db_emmy.tables["tourne"].addData({id_acteur: 23, id_film: 1, role: "Cersei Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 24, id_film: 3, role: "Princesse Margaret"})
+        db_emmy.tables["tourne"].addData({id_acteur: 25, id_film: 4, role: "Serena Joy Waterford"})
+        databases.push(db_emmy)
+    </script>
+</body>
+</html>
