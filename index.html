@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Entrainement au langage SQL</title>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 12pt;
+            background-color: white;
+        }
+        #requete {
+            border: 1px solid black;
+            resize: none;
+            width: 590px;
+            margin: 0px;
+        }
+        #requete-container {
+            text-align: center;
+            width: 600px;
+            margin: 2px auto;
+            padding: 0px
+        }
+        #reponse-container {
+            background-color: black;
+            color: white;
+            width: 600px;
+            height: 500px;
+            margin: 2px auto;
+            padding: 0px;
+        }
+        #reponse {
+            margin: 0px;
+            padding: 4px;
+            height: 100%;
+            overflow: scroll;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="reponse-container">
+        <p id="reponse"></p>
+    </div>
+    <form id="requete-container">
+        <textarea id="requete" rows=1></textarea>
+        <input type="submit" value="Envoyer la requête." />
+    </form>
+    <script language="javascript">
+        databases = []
+        currentDatabase = null
+        class Database {
+            constructor(nom) {
+                this.nom = nom
+                this.tables = []
+            }
+        }
+        class Table {
+            constructor(nom) {
+                this.nom = nom
+                this.columns = []
+                this.labels = []
+            }
+        }
+        class Label {
+            constructor(nom, type) {
+                this.type = type
+                this.nom = nom
+            }
+        }
+        function checkName(nom) {
+            if (nom) {
+                const regex = /^\w+$/g
+                if (regex.test(nom)) {
+                    return "ok"
+                } else {
+                    return `Le nom "${nom}" contient des caractères interdits`
+                }
+            } else {
+                return incomplete()
+            }
+        }
+        function incomplete() {
+            return "Erreur : requête incomplète"
+        }
+        function createDatabase(nom) {
+            const check = checkName(nom)
+            if (check == "ok") {
+                if (databases.filter(db => db.nom.toUpperCase() == nom.toUpperCase()).length) {
+                    return `Erreur : Une base de données porte déjà le nom "${nom}".`
+                } else {
+                    const db = new Database(nom)
+                    databases.push(db)
+                    return `La base de données "${nom}" a bien été créée.`
+                }
+            } else {
+                return check
+            }
+        }
+        function showDatabases() {
+            if (databases.length == 0) {
+                return "Aucune base de données existante pour le moment."
+            } else if (databases.length == 1) {
+                return `Une seule base de données existante :<br/>${databases[0].nom}`
+            } else {
+                return `${databases.length} bases de données existantes :<br/>${databases.map(db => db.nom).join(" - ")}`
+            }
+        }
+        function showTables() {
+            if (currentDatabase) {
+                return "Afficher ici les colonnes de la table"
+            } else {
+                return "Aucune base de données sélectionnée pour le moment."
+            }
+        }
+        function useDatabase(nom) {
+            const check = checkName(nom)
+            if (check == "ok") {
+                dbList = databases.filter(db => db.nom.toUpperCase() == nom.toUpperCase())
+                if (dbList.length) {
+                    currentDatabase = dbList[0]
+                    return `La base de données "${nom}" a bien été selectionnée.`
+                } else {
+                    return `Erreur, il n'y a aucune base de données nomée "${nom}".`
+                }
+            } else {
+                return check
+            }
+        }
+        function describeDatabase(nom) {
+            const check = checkName(nom)
+            if (check == "ok") {
+                dbList = currentDatabase.tables.filter(table => table.nom.toUpperCase() == nom.toUpperCase())
+                if (dbList.length) {
+                    return 'table trouvée, écrire ici la description de la table'
+                } else {
+                    return `Erreur, il n'y a aucune table nomée "${nom}" dans cette base de données.`
+                }
+            } else {
+                return check
+            }
+        }
+        function interpreter(event) {
+            event.preventDefault()
+            var req = document.getElementById("requete").value
+            var reponse = ""
+            req = req.replace(/(\r\n|\n\r|\r|\n)/g, " ")
+            reqlist = req.split(" ").filter(term => term != "")
+            console.log(reqlist)
+            if (reqlist[0]) {
+                if (reqlist[0].toUpperCase() == "CREATE") {
+                    if (reqlist[1] && reqlist[1].toUpperCase() == "DATABASE") {
+                        reponse = createDatabase(reqlist[2])
+                    } else {
+                        reponse = incomplete()
+                    }
+                } else if (reqlist[0].toUpperCase() == "SHOW") {
+                    if (reqlist[1] && reqlist[1].toUpperCase() == "DATABASES") {
+                        reponse = showDatabases()
+                    } else if (reqlist[1] && reqlist[1].toUpperCase() == "TABLES") {
+                        reponse = showTables()
+                    } else {
+                        reponse = incomplete()
+                    }
+                } else if (reqlist[0].toUpperCase() == "USE") {
+                    reponse = useDatabase(reqlist[1])
+                } else if (reqlist[0].toUpperCase() == "DESC" || reqlist[0].toUpperCase() == "DESCRIBE") {
+                    reponse = describeDatabase(reqlist[1])
+                } else {
+                    reponse = incomplete()
+                }
+            } else {
+                reponse = incomplete()
+            }
+            const p = document.getElementById("reponse")
+            p.innerHTML += "<br/>"+reponse
+            p.scrollTop = p.scrollHeight;
+        }
+        heure = new Date()
+        document.getElementById("reponse").innerHTML = heure.toGMTString()
+        document.getElementById("requete-container").addEventListener("submit", interpreter)
+    </script>
+</body>
+</html>
