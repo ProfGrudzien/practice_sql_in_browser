@@ -205,20 +205,30 @@
         /*
          * affiche des données sous la forme d'un tableau dans le cadre 'réponse'
          */
-        function printTable(data, largeurs) {
-            const entete = data[0]
+        function printTable(entete, data, largeurs, distinct) {
             for (i=0; i<entete.length; i++) {
-                if (largeurs[i] < entete[i].toString().length) {
-                    largeurs[i] = entete[i].toString().length
-                }
+                largeurs[i] = Math.max(largeurs[i], entete[i].toString().length)
             }
             const ligne = "+" + largeurs.map(l => '-'.repeat(l+2)).join("+") + "+"
             print(ligne)
-            data.forEach(row => {
-                print("| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
-                print(ligne)
-            })
-            print(`${data.length-1} ${data.length>2?"lignes":"ligne"}`, "bleu")
+            print("| " + entete.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
+            print(ligne)
+            const listeTextes = data.map(row => "| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
+            var nb = listeTextes.length
+            if (distinct) {
+                const newListeTextes = Array.from(new Set(listeTextes))
+                newListeTextes.forEach(row => {
+                    print(row)
+                    print(ligne)
+                })
+                nb = newListeTextes.length
+            } else {
+                listeTextes.forEach(row => {
+                    print(row)
+                    print(ligne)
+                })
+            }
+            print(`${nb} ${nb>1?"lignes":"ligne"}`, "bleu")
         }
         /*
          * vérifie que le mot clé de 'requete' à la position 'index' est dans 'dictionnaire'
@@ -251,8 +261,7 @@
         function showDatabases(requete, index) {
             const dblist = databases.map(db => [db.nom])
             const largeur = Math.max(...dblist.map(nom => nom.toString().length))
-            dblist.unshift(["DATABASES"])
-            printTable(dblist, [largeur])
+            printTable(["DATABASES"], dblist, [largeur])
         }
         /*
          * traite la commande mysql 'SHOW TABLES'
@@ -261,8 +270,7 @@
             if (currentDatabase) {
                 const tablesList = Object.keys(currentDatabase.tables).map(nom => [nom])
                 const largeur = Math.max(...tablesList.map(L => L[0].length))
-                tablesList.unshift([`TABLES in ${currentDatabase.nom}`])
-                printTable(tablesList, [largeur])
+                printTable([`TABLES in ${currentDatabase.nom}`], tablesList, [largeur])
             } else {
                 print("Aucune base de données sélectionnée", "rouge")
             }
@@ -298,8 +306,7 @@
                         const infos = Object.values(db.tables[nom].columns).map(lbl => [lbl.nom, lbl.type])
                         const largeurs = [Math.max(...infos.map(L => L[0].length)),
                                           Math.max(...infos.map(L => L[1].length))]
-                        infos.unshift(["COLUMN'S NAME", "TYPE"])
-                        printTable(infos, largeurs)
+                        printTable(["COLUMN'S NAME", "TYPE"], infos, largeurs)
                     } else {
                         print(`Il n'y a aucune table nomée "${nom}" dans la base de données ${db.nom}.`, "rouge")
                     }
@@ -393,6 +400,16 @@
             return [valide, columnsList, tablesList]
         }
         /*
+         * affiche uniquement les colonnes désirées
+         */
+        function showSelectResults(columnsList, tablesList, combinaisons, distinct) {
+            const entete = columnsList.map(col => col.alias)
+            const keepIndex = columnsList.map(col => [tablesList.map(t => t.dbTable).indexOf(col.table), col.nom])
+            const largeurs = columnsList.map(col => col.dbColumn.maxLength)
+            const data = combinaisons.map(elem => keepIndex.map(L => elem[L[0]][L[1]]))
+            printTable(entete, data, largeurs, distinct)
+        }
+        /*
          * traite le mot-clé mysql 'SELECT'
          */
         function select(requete, index) {
@@ -400,7 +417,11 @@
                 if (requete[index+1].toUpperCase() == "DATABASE") {
                     selectDatabase(requete, index + 1)
                 } else if (currentDatabase) {
-                    selectFrom(requete, index)
+                    if (requete[index+1].toUpperCase() == "DISTINCT") {
+                        selectFrom(requete, index + 1, true)
+                    } else {
+                        selectFrom(requete, index, false)
+                    }
                 } else {
                     print("Aucune base de données sélectionnée", "rouge")
                 }
@@ -429,7 +450,7 @@
         /*
          * traite la commande mysql 'SELECT FROM'
          */
-        function selectFrom(requete, index) {
+        function selectFrom(requete, index, distinct) {
             const db = currentDatabase
             const keywords = {
                 "WHERE": unimplemented,
@@ -447,17 +468,11 @@
                         [valide, columnsList, tablesList] = checkSelectFrom(columnsList, tablesList)
                     }
                     if (valide) {
+                        const combinaisons = produitCartesien(tablesList.map(t => t.dbTable.data))
                         if (requete.length > index+1) {
                             print("to be continued", "rouge")
-                        }
-                        else {
-                            const entete = columnsList.map(col => col.alias)
-                            const largeurs = columnsList.map(col => col.dbColumn.maxLength)
-                            const combinaisons = produitCartesien(tablesList.map(t => t.dbTable.data))
-                            const keepIndex = columnsList.map(col => [tablesList.map(t => t.dbTable).indexOf(col.table), col.nom])
-                            const data = combinaisons.map(elem => keepIndex.map(L => elem[L[0]][L[1]]))
-                            data.unshift(entete)
-                            printTable(data, largeurs)
+                        } else {
+                            showSelectResults(columnsList, tablesList, combinaisons, distinct)
                         }
                     } else {
                         print("Erreur de syntaxe", "rouge")
@@ -562,49 +577,49 @@
 
         db_emmy.addTable("tourne")
         db_emmy.tables["tourne"].addColumn("id_acteur", "SMALLINT")
-        db_emmy.tables["tourne"].addColumn("id_film", "SMALLINT")
+        db_emmy.tables["tourne"].addColumn("id_serie", "SMALLINT")
         db_emmy.tables["tourne"].addColumn("role", "VARCHAR")
-        db_emmy.tables["tourne"].addData({id_acteur: 1, id_film: 2, role: "Philip Jennings"})
-        db_emmy.tables["tourne"].addData({id_acteur: 2, id_film: 8, role: 'Martin "Marty" Byrde'})
-        db_emmy.tables["tourne"].addData({id_acteur: 3, id_film: 6, role: "Randall Pearson"})
-        db_emmy.tables["tourne"].addData({id_acteur: 4, id_film: 7, role: "l'homme en noir"})
-        db_emmy.tables["tourne"].addData({id_acteur: 5, id_film: 6, role: "Jack Pearson"})
-        db_emmy.tables["tourne"].addData({id_acteur: 6, id_film: 7, role: "Bernard Lowe"})
-        db_emmy.tables["tourne"].addData({id_acteur: 7, id_film: 3, role: "Élisabeth II"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Sarah Manning"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Elizabeth « Beth » Childs"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Cosima Niehaus"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Alison Hendrix"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Helena"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Rachel Duncan"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Katja Obinger"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Danielle Fournier"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Aryanna Giordano"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Janika Zingler"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Jennifer Fitzsimmons"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Tony Sawicki"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Krystal Goderitch"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "MK (Veera Suominen)"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Niki"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Miriam Johnson"})
-        db_emmy.tables["tourne"].addData({id_acteur: 8, id_film: 9, role: "Camilla Torres"})
-        db_emmy.tables["tourne"].addData({id_acteur: 9, id_film: 4, role: "June Osborne-Offred"})
-        db_emmy.tables["tourne"].addData({id_acteur: 10, id_film: 10, role: "Eve Polastri"})
-        db_emmy.tables["tourne"].addData({id_acteur: 11, id_film: 2, role: "Elizabeth Jennings"})
-        db_emmy.tables["tourne"].addData({id_acteur: 12, id_film: 7, role: "Dolores Abernathy"})
-        db_emmy.tables["tourne"].addData({id_acteur: 13, id_film: 1, role: "Tyrion Lannister"})
-        db_emmy.tables["tourne"].addData({id_acteur: 14, id_film: 1, role: "Jaime Lannister"})
-        db_emmy.tables["tourne"].addData({id_acteur: 15, id_film: 4, role: "Fred Waterford"})
-        db_emmy.tables["tourne"].addData({id_acteur: 16, id_film: 5, role: "Jim Hopper"})
-        db_emmy.tables["tourne"].addData({id_acteur: 17, id_film: 11, role: "Saul Berenson"})
-        db_emmy.tables["tourne"].addData({id_acteur: 18, id_film: 3, role: "Prince Philip"})
-        db_emmy.tables["tourne"].addData({id_acteur: 19, id_film: 7, role: "Maeve Millay"})
-        db_emmy.tables["tourne"].addData({id_acteur: 20, id_film: 4, role: "Emily"})
-        db_emmy.tables["tourne"].addData({id_acteur: 21, id_film: 5, role: "Jane Ives / Onze"})
-        db_emmy.tables["tourne"].addData({id_acteur: 22, id_film: 4, role: "Tante Lydia"})
-        db_emmy.tables["tourne"].addData({id_acteur: 23, id_film: 1, role: "Cersei Lannister"})
-        db_emmy.tables["tourne"].addData({id_acteur: 24, id_film: 3, role: "Princesse Margaret"})
-        db_emmy.tables["tourne"].addData({id_acteur: 25, id_film: 4, role: "Serena Joy Waterford"})
+        db_emmy.tables["tourne"].addData({id_acteur: 1, id_serie: 2, role: "Philip Jennings"})
+        db_emmy.tables["tourne"].addData({id_acteur: 2, id_serie: 8, role: 'Martin "Marty" Byrde'})
+        db_emmy.tables["tourne"].addData({id_acteur: 3, id_serie: 6, role: "Randall Pearson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 4, id_serie: 7, role: "l'homme en noir"})
+        db_emmy.tables["tourne"].addData({id_acteur: 5, id_serie: 6, role: "Jack Pearson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 6, id_serie: 7, role: "Bernard Lowe"})
+        db_emmy.tables["tourne"].addData({id_acteur: 7, id_serie: 3, role: "Élisabeth II"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Sarah Manning"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Elizabeth « Beth » Childs"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Cosima Niehaus"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Alison Hendrix"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Helena"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Rachel Duncan"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Katja Obinger"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Danielle Fournier"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Aryanna Giordano"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Janika Zingler"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Jennifer Fitzsimmons"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Tony Sawicki"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Krystal Goderitch"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "MK (Veera Suominen)"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Niki"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Miriam Johnson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 8, id_serie: 9, role: "Camilla Torres"})
+        db_emmy.tables["tourne"].addData({id_acteur: 9, id_serie: 4, role: "June Osborne-Offred"})
+        db_emmy.tables["tourne"].addData({id_acteur: 10, id_serie: 10, role: "Eve Polastri"})
+        db_emmy.tables["tourne"].addData({id_acteur: 11, id_serie: 2, role: "Elizabeth Jennings"})
+        db_emmy.tables["tourne"].addData({id_acteur: 12, id_serie: 7, role: "Dolores Abernathy"})
+        db_emmy.tables["tourne"].addData({id_acteur: 13, id_serie: 1, role: "Tyrion Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 14, id_serie: 1, role: "Jaime Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 15, id_serie: 4, role: "Fred Waterford"})
+        db_emmy.tables["tourne"].addData({id_acteur: 16, id_serie: 5, role: "Jim Hopper"})
+        db_emmy.tables["tourne"].addData({id_acteur: 17, id_serie: 11, role: "Saul Berenson"})
+        db_emmy.tables["tourne"].addData({id_acteur: 18, id_serie: 3, role: "Prince Philip"})
+        db_emmy.tables["tourne"].addData({id_acteur: 19, id_serie: 7, role: "Maeve Millay"})
+        db_emmy.tables["tourne"].addData({id_acteur: 20, id_serie: 4, role: "Emily"})
+        db_emmy.tables["tourne"].addData({id_acteur: 21, id_serie: 5, role: "Jane Ives / Onze"})
+        db_emmy.tables["tourne"].addData({id_acteur: 22, id_serie: 4, role: "Tante Lydia"})
+        db_emmy.tables["tourne"].addData({id_acteur: 23, id_serie: 1, role: "Cersei Lannister"})
+        db_emmy.tables["tourne"].addData({id_acteur: 24, id_serie: 3, role: "Princesse Margaret"})
+        db_emmy.tables["tourne"].addData({id_acteur: 25, id_serie: 4, role: "Serena Joy Waterford"})
         databases.push(db_emmy)
     </script>
 </body>
