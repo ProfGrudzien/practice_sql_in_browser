@@ -23,29 +23,33 @@
             margin: 2px auto;
             padding: 0px
         }
-        #reponse-container {
+        #reponse {
             background-color: black;
             color: white;
             width: 600px;
             height: 500px;
             margin: 2px auto;
             padding: 0px;
-        }
-        #reponse {
-            margin: 0px;
-            padding: 4px;
-            height: 100%;
-            width: 100%;
             overflow: scroll;
-            white-space: nowrap;
+        }
+        .console {
+            white-space: pre;
+            margin: 0px;
+        }
+        .vert {
+            color: #00ff00;
+        }
+        .rouge {
+            color: #ff8888;
+        }
+        .bleu {
+            color: #8888ff;
         }
     </style>
 </head>
 
 <body>
-    <div id="reponse-container">
-        <p id="reponse"></p>
-    </div>
+    <div id="reponse"></div>
     <form id="requete-container">
         <textarea id="requete" rows=3></textarea>
         <input type="submit" value="Envoyer la requête." />
@@ -168,7 +172,7 @@
             if (regex.test(nom)) {
                 return true
             } else {
-                print(`Le nom "${nom}" contient des caractères interdits`)
+                print(`Le nom "${nom}" contient des caractères interdits`, "rouge")
                 return false
             }
         }
@@ -178,7 +182,7 @@
          */
         function expandText(texte, longueur) {
             if (longueur>=texte.length) {
-                return texte + "&nbsp;".repeat(longueur-texte.length)
+                return texte + " ".repeat(longueur-texte.length)
             } else {
                 return texte
             }
@@ -186,10 +190,17 @@
         /*
          * affiche une ligne dans le cadre 'réponse'
          */
-        function print(texte) {
-            const p = document.getElementById("reponse")
-            p.innerHTML += texte+"<br/>"
-            p.scrollTop = p.scrollHeight;
+        function print(texte, classe) {
+            const div = document.getElementById("reponse")
+            const p = document.createElement("p")
+            p.textContent = texte
+            if (classe) {
+                p.className = "console " + classe
+            } else {
+                p.className = "console "
+            }
+            div.appendChild(p)
+            div.scrollTop = div.scrollHeight;
         }
         /*
          * affiche des données sous la forme d'un tableau dans le cadre 'réponse'
@@ -207,7 +218,7 @@
                 print("| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
                 print(ligne)
             })
-            print(`${data.length-1} ${data.length>2?"lignes":"ligne"}`)
+            print(`${data.length-1} ${data.length>2?"lignes":"ligne"}`, "bleu")
         }
         /*
          * vérifie que le mot clé de 'requete' à la position 'index' est dans 'dictionnaire'
@@ -218,10 +229,10 @@
                 if (dictionnaire[keyword]) {
                     dictionnaire[keyword](requete, index)
                 } else {
-                    print(`Mot clé "${keyword}" inattendu`)
+                    print(`Mot clé "${keyword}" inattendu`, "rouge")
                 }
             } else {
-                print("Requete incomplète")
+                print("Requete incomplète", "rouge")
             }
         }
         /*
@@ -253,7 +264,7 @@
                 tablesList.unshift([`TABLES in ${currentDatabase.nom}`])
                 printTable(tablesList, [largeur])
             } else {
-                print("Aucune base de données sélectionnée")
+                print("Aucune base de données sélectionnée", "rouge")
             }
         }
         /*
@@ -268,11 +279,11 @@
                         currentDatabase = dbList[0]
                         print(`La base de données "${nom}" a bien été selectionnée.`)
                     } else {
-                        print(`Erreur, il n'y a aucune base de données nomée "${nom}".`)
+                        print(`Erreur, il n'y a aucune base de données nomée "${nom}".`, "rouge")
                     }
                 }
             } else {
-                print("Requete incomplète")
+                print("Requete incomplète", "rouge")
             }
         }
         /*
@@ -290,13 +301,13 @@
                         infos.unshift(["COLUMN'S NAME", "TYPE"])
                         printTable(infos, largeurs)
                     } else {
-                        print(`Erreur, il n'y a aucune table nomée "${nom}" dans la base de données ${db.nom}.`)
+                        print(`Il n'y a aucune table nomée "${nom}" dans la base de données ${db.nom}.`, "rouge")
                     }
                 } else {
-                    print("Requete incomplète")
+                    print("Requete incomplète", "rouge")
                 }
             } else {
-                print("Aucune base de données sélectionnée")
+                print("Aucune base de données sélectionnée", "rouge")
             }
         }
         /*
@@ -343,7 +354,7 @@
                     t.dbTable = db.tables[t.nom]
                     Array.prototype.push.apply(allColumns, Object.values(db.tables[t.nom].columns));
                 } else {
-                    print(`La table "${table.nom}" n'existe pas dans la base de données "${currentDatabase.nom}"`)
+                    print(`La table "${table.nom}" n'existe pas dans la base de données "${currentDatabase.nom}"`, "rouge")
                     valide = false
                 }
             })
@@ -353,15 +364,15 @@
                     if (col.table) {
                         const tableIndex = searchTablesAll.indexOf(col.table)
                         if (tableIndex > -1) {
-                            const table = searchTablesAll[tableIndex].dbTable
+                            const table = tablesList[tableIndex % tablesList.length].dbTable
                             if (table[col.nom]) {
                                 col.table = table
-                                col.dbColumn = table[col.nom]
+                                col.dbColumn = table.columns[col.nom]
                             } else {
-                                print(`La colonne "${col.nom}" n'existe pas dans la table "${table.nom}"`)
+                                print(`La colonne "${col.nom}" n'existe pas dans la table "${table.nom}"`, "rouge")
                             }
                         } else {
-                            print(`La table "${col.table}" n'existe pas dans la base de données "${currentDatabase.nom}"`)
+                            print(`La table "${col.table}" n'existe pas dans la base de données "${currentDatabase.nom}"`, "rouge")
                             valide = false
                         }
                     } else {
@@ -370,10 +381,10 @@
                             col.dbColumn = columns[0]
                             col.table = columns[0].table
                         } else if (columns.length > 1) {
-                            print(`Le nom de colonne "${col.nom}" est présent dans plusieurs tables proposées`)
+                            print(`Le nom de colonne "${col.nom}" est présent dans plusieurs tables proposées`, "rouge")
                             valide = false
                         } else {
-                            print(`Le nom de colonne "${col.nom}" n'est présent dans aucune table proposée`)
+                            print(`Le nom de colonne "${col.nom}" n'est présent dans aucune table proposée`, "rouge")
                             valide = false
                         }
                     }
@@ -391,10 +402,10 @@
                 } else if (currentDatabase) {
                     selectFrom(requete, index)
                 } else {
-                    print("Aucune base de données sélectionnée")
+                    print("Aucune base de données sélectionnée", "rouge")
                 }
             } else {
-                print("Requete incomplète")
+                print("Requete incomplète", "rouge")
             }    
         }
         /*
@@ -406,13 +417,13 @@
                     if (currentDatabase) {
                         print(`La base de données "${currentDatabase.nom}" est actuellement selectionnée.`)
                     } else {
-                        print("Aucune base de données n'est sélectionnée")
+                        print("Aucune base de données n'est sélectionnée", "rouge")
                     }
                 } else {
-                    print("Erreur de syntaxe")
+                    print("Erreur de syntaxe", "rouge")
                 }
             } else {
-                print("Requete incomplète")
+                print("Requete incomplète", "rouge")
             }
         }
         /*
@@ -437,7 +448,7 @@
                     }
                     if (valide) {
                         if (requete.length > index+1) {
-                            print("to be continued")
+                            print("to be continued", "rouge")
                         }
                         else {
                             const entete = columnsList.map(col => col.alias)
@@ -449,10 +460,10 @@
                             printTable(data, largeurs)
                         }
                     } else {
-                        print("erreur de syntaxe")
+                        print("Erreur de syntaxe", "rouge")
                     }
                 } else {
-                    print(`Requete incomplète`)
+                    print("Requete incomplète", "rouge")
                 }
             }
         }
@@ -460,7 +471,7 @@
          * retourne un message indiquant que la commande mysql est non implémentée
          */
         function unimplemented(requete, index) {
-            print(`La commande "${requete[index]}" n'est pas implémentée pour le moment.`)
+            print(`La commande "${requete[index]}" n'est pas implémentée pour le moment.`, "rouge")
         }
         /*
          * interprete la commande mysql saisie dans le champ de texte requete
@@ -473,7 +484,7 @@
             const listChar = ["(", ")", ";", ","]
             listChar.forEach(char => req = req.split(char).join(" "+char+" "))
             requete = req.split(" ").filter(term => term != "")
-            print('<font style="color: #00ff00">> ' + originalReq + "</font>")
+            print("> " + originalReq, "vert")
             console.log(requete)
             checkKeyword(requete, 0, mainKeywords)
         }
