@@ -29,7 +29,7 @@
             width: 600px;
             height: 500px;
             margin: 2px auto;
-            padding: 0px;
+            padding: 4px;
             overflow: scroll;
         }
         .console {
@@ -136,6 +136,7 @@
         class SearchColumn {
             constructor(nom) {
                 const liste = nom.split(".")
+                this.raw = nom
                 this.nom = nom
                 this.alias = nom
                 this.dbColumn = null
@@ -148,27 +149,35 @@
         }
         class SearchTable {
             constructor(nom) {
+                this.raw = nom
                 this.nom = nom
                 this.alias = nom
                 this.dbTable = null
             }
         }
         /*
-         * produit cartésien d'une liste de n listes
+         * produit cartésien d'une liste de n tables
          */
         function produitCartesien(L) {
             return L.reduce((acc, cur) => {
-                var rep = []
+                const newAcc = []
+                const data = cur.dbTable.data
                 if (acc.length) {
-                    for (i=0; i<acc.length; i++) {
-                        for (j=0; j<cur.length; j++) {
-                            rep.push(acc[i].concat([cur[j]]))
-                        }
-                    }
+                    acc.forEach(elemAcc => {
+                        data.forEach( elem => {
+                            const obj = {...elemAcc}
+                            obj[cur.nom] = elem
+                            newAcc.push(obj)
+                        })
+                    })
                 } else {
-                    rep = cur.map(elem => [elem])
+                    data.forEach( elem => {
+                        const obj = {}
+                        obj[cur.nom] = elem
+                        newAcc.push(obj)
+                    })
                 }
-                return rep
+                return newAcc
             }, [])
         }
         /*
@@ -210,6 +219,27 @@
             div.scrollTop = div.scrollHeight;
         }
         /*
+         * retourne un callback permettant de trier selon les paramètres à utiliser par la fonction sort
+         */
+        function tri(cols) {
+            const callback = (obj1, obj2) => {
+                for (i=0; i<cols.length; i++) {
+                    const col = cols[i]
+                    const preelem1 = obj1[col.table.nom][col.nom]
+                    const elem1 = typeof preelem1 == "string" ? preelem1.toUpperCase() : preelem1
+                    const preelem2 = obj2[col.table.nom][col.nom]
+                    const elem2 = typeof preelem2 == "string" ? preelem2.toUpperCase() : preelem2
+                    if (elem1 < elem2) {
+                        return col.desc ? false : true
+                    } else if (elem1 > elem2) {
+                        return col.desc ? true : false
+                    }
+                }
+                return true
+            }
+            return callback
+        }
+        /*
          * affiche des données sous la forme d'un tableau dans le cadre 'réponse'
          */
         function printTable(entete, data, largeurs, distinct) {
@@ -220,21 +250,15 @@
             print(ligne)
             print("| " + entete.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
             print(ligne)
-            const listeTextes = data.map(row => "| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
-            var nb = listeTextes.length
+            var listeTextes = data.map(row => "| " + row.map((col, i) => expandText(col.toString(), largeurs[i])).join(" | ") + " |")
             if (distinct) {
-                const newListeTextes = Array.from(new Set(listeTextes))
-                newListeTextes.forEach(row => {
-                    print(row)
-                    print(ligne)
-                })
-                nb = newListeTextes.length
-            } else {
-                listeTextes.forEach(row => {
-                    print(row)
-                    print(ligne)
-                })
+                listeTextes = Array.from(new Set(listeTextes))
             }
+            const nb = listeTextes.length
+            listeTextes.forEach(row => {
+                print(row)
+                print(ligne)
+            })
             print(`${nb} ${nb>1?"lignes":"ligne"}`, "bleu")
         }
         /*
@@ -325,98 +349,6 @@
             }
         }
         /*
-         * recherche (récursivement) le nom des colonnes à afficher pour un SELECT FROM
-         */
-        function exploreColumns(requete, index, columnsList) {
-            if (requete.length > index+2 && requete[index+2] == ',') {
-                columnsList.push(new SearchColumn(requete[index+1]))
-                return exploreColumns(requete, index+2, columnsList)
-            } else if (requete.length > index+1) {
-                columnsList.push(new SearchColumn(requete[index+1]))
-                return [true, index+1, columnsList]
-            } else {
-                return [false, index, columnsList]
-            }
-        }
-        /*
-         * recherche (récursivement) le nom des sources de données et eventuellement les alias avant de faire un SELECT FROM
-         */
-        function exploreTables(requete, index, tablesList) {
-            if (requete.length > index+2 && requete[index+2] == ',') {
-                tablesList.push(new SearchTable(requete[index+1]))
-                return exploreTables(requete, index+2, tablesList)
-            } else if (requete.length > index+1) {
-                tablesList.push(new SearchTable(requete[index+1]))
-                return [true, index+1, tablesList]
-            } else {
-                return [false, index, tablesList]
-            }
-        }
-        /*
-         * retrouve les tables utilisées afin de faire un SELECT FROM
-         */
-        function checkSelectFrom(columnsList, tablesList) {
-            const db = currentDatabase
-            const searchTablesName = tablesList.map(table => table.nom)
-            const searchTablesAlias = tablesList.map(table => table.alias)
-            const searchTablesAll = searchTablesName.concat(searchTablesAlias);
-            const allColumns = []
-            var valide = true
-            /* vérification des tables */
-            tablesList.forEach(t => {
-                if (db.tables[t.nom]) {
-                    t.dbTable = db.tables[t.nom]
-                    Array.prototype.push.apply(allColumns, Object.values(db.tables[t.nom].columns));
-                } else {
-                    print(`La table "${table.nom}" n'existe pas dans la base de données "${currentDatabase.nom}"`, "rouge")
-                    valide = false
-                }
-            })
-            /* vérification des colonnes */
-            if (valide) {
-                columnsList.forEach(col => {
-                    if (col.table) {
-                        const tableIndex = searchTablesAll.indexOf(col.table)
-                        if (tableIndex > -1) {
-                            const table = tablesList[tableIndex % tablesList.length].dbTable
-                            if (table[col.nom]) {
-                                col.table = table
-                                col.dbColumn = table.columns[col.nom]
-                            } else {
-                                print(`La colonne "${col.nom}" n'existe pas dans la table "${table.nom}"`, "rouge")
-                            }
-                        } else {
-                            print(`La table "${col.table}" n'existe pas dans la base de données "${currentDatabase.nom}"`, "rouge")
-                            valide = false
-                        }
-                    } else {
-                        const columns = allColumns.filter(c => c.nom == col.nom)
-                        if (columns.length == 1) {
-                            col.dbColumn = columns[0]
-                            col.table = columns[0].table
-                        } else if (columns.length > 1) {
-                            print(`Le nom de colonne "${col.nom}" est présent dans plusieurs tables proposées`, "rouge")
-                            valide = false
-                        } else {
-                            print(`Le nom de colonne "${col.nom}" n'est présent dans aucune table proposée`, "rouge")
-                            valide = false
-                        }
-                    }
-                })
-            }
-            return [valide, columnsList, tablesList]
-        }
-        /*
-         * affiche uniquement les colonnes désirées
-         */
-        function showSelectResults(columnsList, tablesList, combinaisons, distinct) {
-            const entete = columnsList.map(col => col.alias)
-            const keepIndex = columnsList.map(col => [tablesList.map(t => t.dbTable).indexOf(col.table), col.nom])
-            const largeurs = columnsList.map(col => col.dbColumn.maxLength)
-            const data = combinaisons.map(elem => keepIndex.map(L => elem[L[0]][L[1]]))
-            printTable(entete, data, largeurs, distinct)
-        }
-        /*
          * traite le mot-clé mysql 'SELECT'
          */
         function select(requete, index) {
@@ -424,11 +356,7 @@
                 if (requete[index+1].toUpperCase() == "DATABASE") {
                     selectDatabase(requete, index + 1)
                 } else if (currentDatabase) {
-                    if (requete[index+1].toUpperCase() == "DISTINCT") {
-                        selectFrom(requete, index + 1, true)
-                    } else {
-                        selectFrom(requete, index, false)
-                    }
+                    selectFrom(requete, index)
                 } else {
                     print("Aucune base de données sélectionnée", "rouge")
                 }
@@ -457,36 +385,213 @@
         /*
          * traite la commande mysql 'SELECT FROM'
          */
-        function selectFrom(requete, index, distinct) {
-            const db = currentDatabase
-            const keywords = {
-                "WHERE": unimplemented,
-                "GROUP BY": unimplemented,
-                "HAVING": unimplemented,
-                "ORDER BY": unimplemented,
-                "LIMIT": unimplemented,
+        function selectFrom(requete, index) {
+            const selectFromInfos = {
+                distinct: false,
+                columnsList: [],
+                tablesList: [],
+                orderByList: [],
+                combinaisons: [],
+                requete: requete,
+                index: index
             }
-            var valide, columnsList, tablesList
-            [valide, index, columnsList] = exploreColumns(requete, index, [])
+            if (requete.length > index + 1 && requete[index + 1].toUpperCase() == "DISTINCT") {
+                selectFromInfos.index += 1
+                selectFromInfos.distinct = true
+            }
+            exploreColumns(selectFromInfos)
+        }
+        /*
+         * recherche (récursivement) le nom des colonnes à afficher pour un SELECT FROM
+         */
+        function exploreColumns(I) {
+            if (I.requete.length > I.index+2 && I.requete[I.index+2] == ',') {
+                I.columnsList.push(new SearchColumn(I.requete[I.index+1]))
+                I.index += 2
+                exploreColumns(I)
+            } else if (I.requete.length > I.index+2 && I.requete[I.index+2].toUpperCase() == 'FROM') {
+                I.columnsList.push(new SearchColumn(I.requete[I.index+1]))
+                I.index += 2
+                exploreTables(I)
+            } else {
+                print("erreur lors de la lecture du nom des colonnes", "rouge")
+            }
+        }
+        /*
+         * recherche (récursivement) le nom des sources de données et eventuellement les alias avant de faire un SELECT FROM
+         */
+        function exploreTables(I) {
+            if (I.requete.length > I.index+2 && I.requete[I.index+2] == ',') {
+                I.tablesList.push(new SearchTable(I.requete[I.index+1]))
+                I.index += 2
+                exploreTables(I)
+            } else if (I.requete.length > I.index+1) {
+                I.tablesList.push(new SearchTable(I.requete[I.index+1]))
+                I.index += 1
+                checkTables(I)
+            } else {
+                print("erreur lors de la lecture du nom des tables", "rouge")
+            }
+        }
+        /*
+         * controle et associe les tables utilisées pour un SELECT FROM
+         */
+        function checkTables(I) {
+            const db = currentDatabase
+            var valide = true
+            I.tablesList.forEach(table => {
+                if (db.tables[table.nom]) {
+                    table.dbTable = db.tables[table.nom]
+                } else {
+                    print(`La table "${table.nom}" n'existe pas dans la base de données "${db.nom}"`, "rouge")
+                    valide = false
+                }
+            })
             if (valide) {
-                if (requete.length > index+1 && requete[index+1].toUpperCase() == 'FROM') {
-                    [valide, index, tablesList] = exploreTables(requete, index+1, [])
-                    if (valide) {
-                        [valide, columnsList, tablesList] = checkSelectFrom(columnsList, tablesList)
-                    }
-                    if (valide) {
-                        const combinaisons = produitCartesien(tablesList.map(t => t.dbTable.data))
-                        if (requete.length > index+1) {
-                            print("to be continued", "rouge")
+                checkColumns(I)
+            }
+        }
+        /*
+         * controle et associe les colonnes afin de faire un SELECT FROM
+         */
+        function checkColumns(I) {
+            var valide = true
+            const db = currentDatabase
+            const searchTablesName = I.tablesList.map(table => table.nom)
+            const searchTablesAlias = I.tablesList.map(table => table.alias)
+            const searchTablesAll = searchTablesName.concat(searchTablesAlias);
+            const allColumns = I.tablesList.reduce((acc, cur) => {
+                Object.values(cur.dbTable.columns).forEach(col => acc.push(col))
+                return acc
+            }, [])
+            I.columnsList.forEach(col => {
+                if (col.table) {
+                    const tableIndex = searchTablesAll.indexOf(col.table)
+                    if (tableIndex > -1) {
+                        const table = I.tablesList[tableIndex % I.tablesList.length].dbTable
+                        if (table[col.nom]) {
+                            col.table = table
+                            col.dbColumn = table.columns[col.nom]
                         } else {
-                            showSelectResults(columnsList, tablesList, combinaisons, distinct)
+                            print(`La colonne "${col.nom}" n'existe pas dans la table "${table.nom}"`, "rouge")
+                            valide = false
                         }
                     } else {
-                        print("Erreur de syntaxe", "rouge")
+                        print(`La table "${col.table}" n'existe pas dans la base de données "${db.nom}"`, "rouge")
+                            valide = false
                     }
                 } else {
-                    print("Requete incomplète", "rouge")
+                    const columns = allColumns.filter(c => c.nom == col.nom)
+                    if (columns.length == 1) {
+                        col.dbColumn = columns[0]
+                        col.table = columns[0].table
+                    } else if (columns.length > 1) {
+                        print(`Le nom de colonne "${col.nom}" est présent dans plusieurs tables proposées`, "rouge")
+                        valide = false
+                    } else {
+                        print(`Le nom de colonne "${col.nom}" n'est présent dans aucune table proposée`, "rouge")
+                        valide = false
+                    }
                 }
+            })
+            if (valide) {
+                I.combinaisons = produitCartesien(I.tablesList)
+                if (I.requete.length > I.index+1 && I.requete[I.index+1].toUpperCase() == 'ORDER') {
+                    I.index += 1
+                    if (I.requete.length > I.index+1 && I.requete[I.index+1].toUpperCase() == 'BY') {
+                        I.index += 1
+                        exploreOrderBy(I)
+                    } else {
+                        print("Erreur de syntaxe")
+                    }
+                } else {
+                    showSelectResults(I)
+                }
+            }
+        }
+        /*
+         * recherche (récursivement) les tables pour un ORDER BY
+         */
+        function exploreOrderBy(I) {
+            if (I.requete.length > I.index+2 && I.requete[I.index+2] == ',') {
+                const col = new SearchColumn(I.requete[I.index+1])
+                col.desc = true
+                I.orderByList.push(col)
+                I.index += 2
+                exploreOrderBy(I)
+            } else if (I.requete.length > I.index+3 && I.requete[I.index+3] == ',') {
+                if (I.requete[I.index+2].toUpperCase() == "DESC") {
+                    const col = new SearchColumn(requete[index+1])
+                    col.desc = false
+                    I.orderByList.push(col)
+                    I.index += 3
+                    exploreOrderBy(I)
+                } else {
+                    print("Erreur de syntaxe")
+                }
+            } else if (I.requete.length > I.index+2 && I.requete[I.index+2].toUpperCase() == "DESC") {
+                const col = new SearchColumn(I.requete[I.index+1])
+                col.desc = false
+                I.orderByList.push(col)
+                I.index += 2
+                checkOrderBy(I)
+            } else if (I.requete.length > I.index+1) {
+                const col = new SearchColumn(I.requete[I.index+1])
+                col.desc = true
+                I.orderByList.push(col)
+                I.index += 1
+                checkOrderBy(I)
+            } else {
+                print("Requete incomplète")
+            }
+        }
+        /*
+         * vérifie les colonnes afin de faire un tri grâce à ORDER BY
+         */
+        function checkOrderBy(I) {
+            var valide = true
+            const db = currentDatabase
+            I.orderByList.forEach(col => {
+                const cols = I.columnsList.filter(c => c.nom == col.nom)
+                if (cols.length == 1) {
+                    col.dbColumn = cols[0].dbColumn
+                    col.table = cols[0].table
+                } else if (cols.length > 1) {
+                    const tabs = I.columnsList.filter(c => c.table == col.table)
+                    if (cols.length == 1) {
+                        col.dbColumn = tabs[0].dbColumn
+                        col.table = tabs[0].table
+                    } else {
+                        print(`Impossible d'ordonner les résultats selon "${col.raw}"`)
+                        valide = false
+                    }
+                } else {
+                    print(`Impossible d'ordonner les résultats selon "${col.raw}"`)
+                    valide = false
+                }
+            })
+            if (valide) {
+                applyOrderBy(I)
+            }
+        }
+        /*
+         * traite la commande ORDER BY suite à un 'SELECT FROM'
+         */
+        function applyOrderBy(I) {
+            I.combinaisons.sort(tri(I.orderByList))
+            showSelectResults(I)
+        }
+        /*
+         * affiche uniquement les colonnes désirées
+         */
+        function showSelectResults(I) {
+            if (I.requete.length > I.index + 1) {
+                print(`Mot clé "${I.requete[I.index + 1]}" inattendu`, "rouge")
+            } else {
+                const entete = I.columnsList.map(col => col.alias)
+                const largeurs = I.columnsList.map(col => col.dbColumn.maxLength)
+                data = I.combinaisons.map(elem => I.columnsList.map(col => elem[col.table.nom][col.nom]))
+                printTable(entete, data, largeurs, I.distinct)
             }
         }
         /*
@@ -516,7 +621,10 @@
                 print('La requete doit finir par ";"', "rouge")
             }
         }
+        
         document.getElementById("requete-container").addEventListener("submit", interpreter)
+        print('Base de données en mode "Bac à sable" prête !', "bleu")
+        print('dernière nouveauté : prise en charge de "ORDER BY"', "bleu")
         
         /*
          * un exemple de database sur les sériers et acteurs des Emmy Awards 2018
