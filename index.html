@@ -36,6 +36,13 @@
             white-space: pre;
             margin: 0px;
         }
+        .requete {
+            white-space: normal;
+            color: #00ff00;
+        }
+        .requete::before{
+            content: "> ";
+        }
         .vert {
             color: #00ff00;
         }
@@ -493,15 +500,21 @@
          */
         function interpreter(event) {
             event.preventDefault()
-            const originalReq = document.getElementById("requete").value
-            var req = originalReq
-            req = req.replace(/(\r\n|\n\r|\r|\n)/g, " ")
-            const listChar = ["(", ")", ";", ","]
-            listChar.forEach(char => req = req.split(char).join(" "+char+" "))
-            requete = req.split(" ").filter(term => term != "")
-            print("> " + originalReq, "vert")
-            console.log(requete)
-            checkKeyword(requete, 0, mainKeywords)
+            const originalReq = document.getElementById("requete").value.replace(/^\s+|\s+$/g, '')
+            if (originalReq[originalReq.length - 1] == ";") {
+                const listeReq = originalReq.replace("\n", " ").split(';').filter(term => term != "")
+                listeReq.forEach( elem => {
+                    print(elem.replace('\n', ' ')+";", "requete")
+                    var req = elem.replace(/(\r\n|\n\r|\r|\n)/g, " ")
+                    const listChar = ["(", ")", ","]
+                    listChar.forEach(char => req = req.split(char).join(" "+char+" "))
+                    const requete = req.split(" ").filter(term => term != "")
+                    checkKeyword(requete, 0, mainKeywords)
+                })
+            } else {
+                print(originalReq, "requete")
+                print('La requete doit finir par ";"', "rouge")
+            }
         }
         document.getElementById("requete-container").addEventListener("submit", interpreter)
         
