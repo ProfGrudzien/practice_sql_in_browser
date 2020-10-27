@@ -464,12 +464,34 @@
                 Object.values(cur.dbTable.columns).forEach(col => acc.push(col))
                 return acc
             }, [])
+            const listeEtoiles = I.columnsList.filter(col => col.nom == "*")
+            listeEtoiles.forEach(col => {
+                if (col.table) {
+                    const tableIndex = searchTablesAll.indexOf(col.table)
+                    if (tableIndex > -1) {
+                        const table = I.tablesList[tableIndex % I.tablesList.length]
+                        Object.values(table.dbTable.columns).forEach(c => {
+                            I.columnsList.push(new SearchColumn(`${col.table}.${c.nom}`))
+                        })
+                    } else {
+                        print(`La table "${col.table}" n'est pas sélectionnée`, "rouge")
+                        valide = false
+                    }
+                } else {
+                    I.tablesList.forEach(table => {
+                        Object.values(table.dbTable.columns).forEach(c => {
+                            I.columnsList.push(new SearchColumn(`${table.nom}.${c.nom}`))
+                        })
+                    })
+                }
+            })
+            I.columnsList = I.columnsList.filter(col => col.nom != "*")
             I.columnsList.forEach(col => {
                 if (col.table) {
                     const tableIndex = searchTablesAll.indexOf(col.table)
                     if (tableIndex > -1) {
                         const table = I.tablesList[tableIndex % I.tablesList.length].dbTable
-                        if (table[col.nom]) {
+                        if (table.columns[col.nom]) {
                             col.table = table
                             col.dbColumn = table.columns[col.nom]
                         } else {
@@ -477,8 +499,8 @@
                             valide = false
                         }
                     } else {
-                        print(`La table "${col.table}" n'existe pas dans la base de données "${db.nom}"`, "rouge")
-                            valide = false
+                        print(`La table "${col.table}" n'est pas sélectionnée`, "rouge")
+                        valide = false
                     }
                 } else {
                     const columns = allColumns.filter(c => c.nom == col.nom)
@@ -624,7 +646,7 @@
         
         document.getElementById("requete-container").addEventListener("submit", interpreter)
         print('Base de données en mode "Bac à sable" prête !', "bleu")
-        print('dernière nouveauté : prise en charge de "ORDER BY"', "bleu")
+        print('dernière nouveauté : prise en charge de "*" dans les requetes "SELECT"', "bleu")
         
         /*
          * un exemple de database sur les sériers et acteurs des Emmy Awards 2018
