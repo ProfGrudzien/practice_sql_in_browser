@@ -7,7 +7,7 @@ Vous pouvez par exemple tester les commandes suivantes :
 
 + SHOW DATABASES;
 + USE emmy18;
-+ SELECT database()
++ SELECT database();
 + SHOW tables;
 + DESCRIBE acteurs;
 + SELECT nom, prenom FROM acteurs;
