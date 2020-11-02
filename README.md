@@ -13,3 +13,4 @@ Vous pouvez par exemple tester les commandes suivantes :
 + SELECT nom, prenom FROM acteurs;
 + SELECT * FROM tourne;
 + SELECT nom, diffuseur FROM series ORDER BY diffuseur;
++ SELECT acteurs.nom FROM acteurs;
