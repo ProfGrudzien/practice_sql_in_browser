@@ -136,6 +136,17 @@
                 this.SQL = raw.replace("\n", " ")
                 this.tokensList = []
                 this.index = 0
+                this.distinct = false
+                this.columnsAliasList = []
+                this.columnsNamesList = []
+                this.tablesNamesList = []
+                this.whereList = []
+                this.orderByNameList = []
+                this.columnsList = []
+                this.tablesList = []
+                this.orderByList = []
+                this.descList = []
+                this.combinaisons = []
             }
         }
 
@@ -277,6 +288,22 @@
         }
 
         /* 
+         * Parcours la chaine de caractère `raw` à la recherche d'un nombre
+         */
+        function searchNumber(R) {
+            var nb = ""
+            while (R.raw[R.index] && "0123456789.".indexOf(R.raw[R.index]) > -1) {
+                nb += R.raw[R.index]
+                R.index += 1
+            }
+            if (nb.split('.').length < 2) {
+                R.tokensList.push(new Token(nb, "number"))
+            } else {
+                throw "Une erreur lors de la recherche d'une valeur numérique"
+            }
+        }
+
+        /* 
          * Parcours la chaine de caractère `sql` de la requête `R` pour la découper en "tokens"
          */
         function tokenize(R) {
@@ -285,7 +312,17 @@
                 '"': R => searchString(R, '"'),
                 "(": searchParentheses,
                 " ": R => {R.index += 1},
-                ",": R => {R.index += 1; R.tokensList.push(new Token(",", null))}
+                ",": R => {R.index += 1; R.tokensList.push(new Token(",", null))},
+                "0": searchNumber,
+                "1": searchNumber,
+                "2": searchNumber,
+                "3": searchNumber,
+                "4": searchNumber,
+                "5": searchNumber,
+                "6": searchNumber,
+                "7": searchNumber,
+                "8": searchNumber,
+                "9": searchNumber,
             }
             const endChar = ["'", '"', "(", ' ', "=", ">", "<", ";", ',']
             if (specialChar[R.raw[R.index]]) {
@@ -351,7 +388,7 @@
         }
         
         /*
-         * applique le prochain mot clé existe s'il est reconnu
+         * applique le prochain mot clé s'il est reconnu
          */
         function applyNextKeyword(R, dict) {
             if (R.tokensList.length > R.index) {
@@ -375,12 +412,11 @@
         }
         
         /*
-         * récupère le nom du prochain token
+         * lit le nom du prochain token sans changer l'index
          */
         function getNameFromToken(R) {
             if (existNextToken(R)) {
                 const name = R.tokensList[R.index].nom
-                R.index += 1
                 return name
             } else {
                 throw `Requête incomplète.`
@@ -464,6 +500,22 @@
         }
         
         /*
+         * sépare le nom de la table du nom de la colonne.
+         * retourne un objet décrivant la table et un alias
+         */
+        function setColumn(nom) {
+            const liste = nom.split(".")
+            if (liste.length == 2) {
+                return {nom: liste[1], table: liste[0]}
+            } else if (liste.length == 1) {
+                return {nom: liste[0], table: null}
+            } else {
+                throw `Trop de « . » dans le nom de colonne « ${next.nom} »`
+            }
+        }
+        
+        
+        /*
          * execute une requete
          */
         function execute(R) {
@@ -477,6 +529,63 @@
                 "SELECT": select
             }
             applyNextKeyword(R, firstKeyword)
+        }
+        
+        /*
+         * fonctions de comparaison
+         */
+        class Egal {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a != b : a == b
+                    return reponse
+                }
+            }
+        }
+        
+        const dicoCompare = {
+            '=': Egal,
+            '!=': different,
+            '<>': different,
+            '>': superieur,
+            '<': inferieur,
+            '>=': superieurEgal,
+            '<=': inferieurEgal
+        }
+        
+        function different(A, B) {return A != B}
+        function superieur(A, B) {return A > B}
+        function inferieur(A, B) {return A < B}
+        function superieurEgal(A, B) {return A >= B}
+        function inferieurEgal(A, B) {return A <= B}
+        function appartientA(A, L) {return L.indexOf(A) > -1}
+        function entre(A, m, M) {return A >= m && A <= M}
+        function like(A, S) {
+            const regExp = new RegExp(`^${A.split('%').join('.*').split('_').join('.')}$`)
+            return regExp.test(S)
+        }
+        function estNulle(A) {return A == null}
+        function estPasNulle(A) {return A != null}
+        function compare_binaire(A, B, symbole) {
+            if (dicoCompare[symbole]) {
+                return dicoCompare[symbole](A, B)
+            } else {
+                throw `L'opérateur de comparaison « ${symbole} » non valable.`
+            }
         }
         
         /*
@@ -517,6 +626,7 @@
          */
         function use(R) {
             const nom = getNameFromToken(R)
+            R.index += 1
             currentDatabase = findDatabase(nom)
             print(`La base de données "${nom}" a bien été selectionnée.`)
         }
@@ -526,6 +636,7 @@
          */
         function describe(R) {
             const nom = getNameFromToken(R)
+            R.index += 1
             const table = findTable(nom)
             const infos = Object.values(table.columns).map(lbl => [lbl.nom, lbl.type])
             const largeurs = [Math.max(...infos.map(L => L[0].length)),
@@ -535,7 +646,8 @@
 
         document.getElementById("requete-container").addEventListener("submit", interpreter)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
-        print('dernière nouveauté : prise en charge de « * » dans les requetes « SELECT »', "bleu")
+        print('dernière nouveauté : prise en charge de « WHERE ... = » dans les requetes « SELECT »', "bleu")
+        print('(mais pas encore de « AND » et « OR »)', "bleu")
         
         /*
          * traite le mot-clé mysql 'SELECT'
@@ -543,12 +655,14 @@
         function select(R) {
             const next = getNameFromToken(R)
             if (next.toUpperCase() == "DATABASE") {
+                R.index += 1
                 selectDatabase(R)
             } else if (next.toUpperCase() == "DISTINCT") {
-                selectFrom(R, true)
+                R.distinct = true
+                R.index += 1
+                selectFrom(R)
             } else {
-                R.index -= 1
-                selectFrom(R, false)
+                selectFrom(R)
             }
         }
         
@@ -567,24 +681,12 @@
         /*
          * traite la commande mysql 'SELECT FROM'
          */
-        function selectFrom(R, distinct) {
-            R.from = {
-                distinct: distinct,
-                columnsAliasList: [],
-                columnsNamesList: [],
-                tablesNamesList: [],
-                orderByNameList: [],
-                columnsList: [],
-                tablesList: [],
-                orderByList: [],
-                descList: [],
-                combinaisons: [],
-                whereList: []
-            }
+        function selectFrom(R) {
             exploreColumns(R)
             exploreTables(R)
             checkTables(R)
             checkColumns(R)
+            selectWhere(R)
             selectOrderBy(R)
             showSelectResults(R)
         }
@@ -597,15 +699,10 @@
             while (next.nom == ",") {
                 next = getNextToken(R)
                 if (next.delimiteur == null) {
-                    const liste = next.nom.split(".")
-                    if (liste.length == 2) {
-                        R.from.columnsNamesList.push({nom: liste[1], table: liste[0]})
-                        R.from.columnsAliasList.push(next.nom)
-                    } else if (liste.length == 1) {
-                        R.from.columnsNamesList.push({nom: liste[0], table: null})
-                        R.from.columnsAliasList.push(next.nom)
-                    } else {
-                        throw `Trop de « . » dans le nom de colonne « ${next.nom} »`
+                    const col = setColumn(next.nom)
+                    R.columnsNamesList.push(col)
+                    if (next.nom.indexOf("*") == -1) {
+                        R.columnsAliasList.push(next.nom)
                     }
                     next = getNextToken(R)
                 } else {
@@ -620,12 +717,13 @@
          */
         function exploreTables(R) {
             const token = getNameFromToken(R)
+            R.index += 1
             if (token.toUpperCase() == "FROM") {
                 var next = {nom: ","}
                 while (next.nom == ",") {
                     next = getNextToken(R)
                     if (next.delimiteur == null) {
-                        R.from.tablesNamesList.push(next.nom)
+                        R.tablesNamesList.push(next.nom)
                         if (existNextToken(R)) {
                             next = getNextToken(R)
                         } else {
@@ -646,30 +744,87 @@
          * controle et associe les tables utilisées pour un SELECT FROM
          */
         function checkTables(R) {
-            R.from.tablesList = R.from.tablesNamesList.map(table => findTable(table))
+            R.tablesList = R.tablesNamesList.map(table => findTable(table))
         }
         
         /*
          * controle et associe les colonnes afin de faire un SELECT FROM
          */
         function checkColumns(R) {
-            R.from.columnsNamesList.forEach(col => {
+            R.columnsNamesList.forEach(col => {
                 if (col.table && col.nom == "*") {
-                    const table = R.from.tablesList.filter(tab => tab.nom == liste[0])[0]
+                    const table = R.tablesList.filter(tab => tab.nom == col.table)[0]
                     if (table) {
-                        Array.prototype.push.apply(R.from.columnsList, Object.values(table.columns));
+                        Array.prototype.push.apply(R.columnsList, Object.values(table.columns));
+                        Array.prototype.push.apply(R.columnsAliasList, Object.values(table.columns).map(col => `${col.table.nom}.${col.nom}`));
                     } else {
                         throw `La table « ${col.table} » n'est pas dans la liste des tables sélectionnées.`
                     }
                 } else if (col.nom == "*") {
-                    R.from.tablesList.forEach(tab => {
-                        Array.prototype.push.apply(R.from.columnsList, Object.values(tab.columns));
+                    R.tablesList.forEach(tab => {
+                        Array.prototype.push.apply(R.columnsList, Object.values(tab.columns));
+                        Array.prototype.push.apply(R.columnsAliasList, Object.values(tab.columns).map(col => `${col.nom}`));
                     })
                 } else {
-                    R.from.columnsList.push(findColumn(col, R.from.tablesList))
+                    R.columnsList.push(findColumn(col, R.tablesList))
                 }
             })
-            R.from.combinaisons = produitCartesien(R.from.tablesList)
+            R.combinaisons = produitCartesien(R.tablesList)
+        }
+        
+        /*
+         * traite si besoin le mot clé WHERE de la requete SELECT
+         */
+        function selectWhere(R) {
+            if (existNextToken(R)) {
+                if (getNameFromToken(R).toUpperCase() == "WHERE") {
+                    R.index += 1
+                    exploreWhere(R)
+                    checkWhere(R)
+                    applyWhere(R)
+                }
+            }
+        }
+        
+        /*
+         * recherche les comparaisons pour un WHERE
+         */
+        function exploreWhere(R) {
+            const not = (getNameFromToken(R).toUpperCase() == "ORDER")
+            if (not) {R.index += 1}
+            const A = getNextToken(R)
+            const symbole = getNextToken(R).nom
+            if (dicoCompare[symbole]) {
+                const B = getNextToken(R)
+                R.whereList.push(new dicoCompare[symbole](A, B))
+            } else {
+                throw `Comparaison ${symbole} pas encore gérée...`
+            }
+        }
+        
+        /*
+         * vérifie les paramètres de Where
+         */
+        function checkWhere(R) {
+            R.whereList.forEach(e => {
+                if (e.A.delimiteur) {
+                    if (e.A.delimiteur != 'quotes' && e.A.delimiteur != 'number') {throw `La paramètre ${e.A.nom} est innatendu`}
+                } else {
+                    e.A = findColumn(setColumn(e.A.nom), R.tablesList)
+                }
+                if (e.B.delimiteur) {
+                    if (e.B.delimiteur != 'quotes' && e.B.delimiteur != 'number') {throw `La paramètre ${e.B.nom} est innatendu`}
+                } else {
+                    e.B = findColumn(setColumn(e.B.nom), R.tablesList)
+                }
+            })
+        }
+        
+        /*
+         * filtres les données grâces aux comparaisons
+         */
+        function applyWhere(R) {
+            R.combinaisons = R.combinaisons.filter(E => R.whereList[0].f(E))
         }
         
         /*
@@ -678,6 +833,7 @@
         function selectOrderBy(R) {
             if (existNextToken(R)) {
                 if (getNameFromToken(R).toUpperCase() == "ORDER") {
+                    R.index += 1
                     const next = getNextToken(R)
                     if (next.nom.toUpperCase() == "BY") {
                         exploreOrderBy(R)
@@ -686,8 +842,6 @@
                     } else {
                         throw `Requête invalide, vérifier la clause « ORDER ${next.nom} »`
                     }
-                } else {
-                    R.index += -1
                 }
             }
         }
@@ -699,22 +853,22 @@
             var next = {nom: ","}
             while (next.nom == "," || next.nom.toUpperCase() == "DESC") {
                 if (next.nom.toUpperCase() == "DESC") {
-                    R.from.descList.pop()
-                    R.from.descList.push(false)
+                    R.descList.pop()
+                    R.descList.push(false)
                     if (existNextToken(R)) {
                         next = getNextToken(R)
                     } else {
                         next = {nom: ""}
                     }
                 } else {
-                    R.from.descList.push(true)
+                    R.descList.push(true)
                     next = getNextToken(R)
                     if (next.delimiteur == null) {
                         const liste = next.nom.split(".")
                         if (liste.length == 2) {
-                            R.from.orderByNameList.push({nom: liste[1], table: liste[0]})
+                            R.orderByNameList.push({nom: liste[1], table: liste[0]})
                         } else if (liste.length == 1) {
-                            R.from.orderByNameList.push({nom: liste[0], table: null})
+                            R.orderByNameList.push({nom: liste[0], table: null})
                         } else {
                             throw `Trop de « . » dans le nom de colonne « ${next.nom} »`
                         }
@@ -734,8 +888,8 @@
          * vérifie les colonnes afin de faire un tri grâce à ORDER BY
          */
         function checkOrderBy(R) {
-            R.from.orderByNameList.forEach(col => {
-                R.from.orderByList.push(findColumn(col, R.from.tablesList))
+            R.orderByNameList.forEach(col => {
+                R.orderByList.push(findColumn(col, R.tablesList))
             })
         }
         
@@ -743,7 +897,7 @@
          * traite la commande ORDER BY suite à un 'SELECT FROM'
          */
         function applyOrderBy(R) {
-            R.from.combinaisons.sort(tri(R.from.orderByList, R.from.descList))
+            R.combinaisons.sort(tri(R.orderByList, R.descList))
         }
         
         /*
@@ -753,10 +907,10 @@
             if (existNextToken(R)) {
                 throw `Mot clé "${getNameFromToken(R)}" inattendu`
             }
-            const entete = R.from.columnsAliasList
-            const largeurs = R.from.columnsList.map(col => col.maxLength)
-            const data = R.from.combinaisons.map(elem => R.from.columnsList.map(col => elem[col.table.nom][col.nom]))
-            printTable(entete, data, largeurs, R.from.distinct)
+            const entete = R.columnsAliasList
+            const largeurs = R.columnsList.map(col => col.maxLength)
+            const data = R.combinaisons.map(elem => R.columnsList.map(col => elem[col.table.nom][col.nom]))
+            printTable(entete, data, largeurs, R.distinct)
         }
         
         /*
