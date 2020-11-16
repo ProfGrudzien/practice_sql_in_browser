@@ -292,14 +292,51 @@
          */
         function searchNumber(R) {
             var nb = ""
-            while (R.raw[R.index] && "0123456789.".indexOf(R.raw[R.index]) > -1) {
+            while (R.raw[R.index] && "0123456789.-".indexOf(R.raw[R.index]) > -1) {
                 nb += R.raw[R.index]
                 R.index += 1
             }
-            if (nb.split('.').length < 2) {
+            if (nb.split('.').length < 2 && nb.split('-').length == 1) {
                 R.tokensList.push(new Token(nb, "number"))
+            } else if (nb.split('-').length == 3 && nb.split('.').length == 1) {
+                R.tokensList.push(new Token(nb, "date"))
             } else {
                 throw "Une erreur lors de la recherche d'une valeur numérique"
+            }
+        }
+
+        /* 
+         * Parcours la chaine de caractère `raw` à la recherche d'un opérateur de comparaison
+         */
+        function getOperateur(R) {
+            if (R.raw[R.index] == '!') {
+                if (R.raw[R.index + 1] && R.raw[R.index + 1] == '=') {
+                    R.index += 2
+                    R.tokensList.push(new Token("!=", "operateur"))
+                } else {
+                    throw "Caractère « ! » inattendu."
+                }
+            }
+            if (R.raw[R.index] == '<') {
+                if (R.raw[R.index + 1] && R.raw[R.index + 1] == '>') {
+                    R.index += 2
+                    R.tokensList.push(new Token("<>", "operateur"))
+                } else if (R.raw[R.index + 1] && R.raw[R.index + 1] == '=') {
+                    R.index += 2
+                    R.tokensList.push(new Token("<=", "operateur"))
+                } else {
+                    R.index += 1
+                    R.tokensList.push(new Token("<", "operateur"))
+                }
+            }
+            if (R.raw[R.index] == '>') {
+                if (R.raw[R.index + 1] && R.raw[R.index + 1] == '=') {
+                    R.index += 2
+                    R.tokensList.push(new Token(">=", "operateur"))
+                } else {
+                    R.index += 1
+                    R.tokensList.push(new Token(">", "operateur"))
+                }
             }
         }
 
@@ -313,6 +350,9 @@
                 "(": searchParentheses,
                 " ": R => {R.index += 1},
                 ",": R => {R.index += 1; R.tokensList.push(new Token(",", null))},
+                "!": getOperateur,
+                "<": getOperateur,
+                ">": getOperateur,
                 "0": searchNumber,
                 "1": searchNumber,
                 "2": searchNumber,
@@ -351,7 +391,9 @@
             if (raw[index]) {
                 return [new Request(req), index+1]
             } else if (req.replace(/[ ]/gi,"") != "") {
-                print("> "+req, "requete")
+                const div = document.getElementById("reponse")
+                div.removeChild(div.lastChild);
+                print("> "+req+";", "requete")
                 throw 'Il manque le caractère de fin de requête « ; »'
             } else {
                 return [null, index]
@@ -384,6 +426,7 @@
                 parseSQL(raw.replace(/[\n\t\r]/gi,""))
             } catch (e) {
                 print(e, "rouge")
+                print(">", "requete")
             }
         }
         
@@ -519,6 +562,8 @@
          * execute une requete
          */
         function execute(R) {
+            const div = document.getElementById("reponse")
+            div.removeChild(div.lastChild);
             print("> "+R.raw+";", "requete")
             R.index = 0
             const firstKeyword = {
@@ -529,6 +574,7 @@
                 "SELECT": select
             }
             applyNextKeyword(R, firstKeyword)
+            print(">", "requete")
         }
         
         /*
@@ -556,15 +602,130 @@
                 }
             }
         }
+
+        class Different {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a == b : a != b
+                    return reponse
+                }
+            }
+        }
+
+        class Superieur {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a <= b : a > b
+                    return reponse
+                }
+            }
+        }
+
+        class SuperieurEgal {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a < b : a >= b
+                    return reponse
+                }
+            }
+        }
+
+        class Inferieur {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a >= b : a < b
+                    return reponse
+                }
+            }
+        }
+
+        class InferieurEgal {
+            constructor(A, B, not) {
+                this.A = A
+                this.B = B
+                this.not = not
+                this.f = (E) => {
+                    var a, b
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    if (this.B.delimiteur) {
+                        b = this.B.nom
+                    } else {
+                        b = E[this.B.table.nom][this.B.nom]
+                    }
+                    const reponse = this.not ? a > b : a <= b
+                    return reponse
+                }
+            }
+        }
         
         const dicoCompare = {
             '=': Egal,
-            '!=': different,
-            '<>': different,
-            '>': superieur,
-            '<': inferieur,
-            '>=': superieurEgal,
-            '<=': inferieurEgal
+            '!=': Different,
+            '<>': Different,
+            '>': Superieur,
+            '<': Inferieur,
+            '>=': SuperieurEgal,
+            '<=': InferieurEgal
         }
         
         function different(A, B) {return A != B}
@@ -646,9 +807,9 @@
 
         document.getElementById("requete-container").addEventListener("submit", interpreter)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
-        print('dernière nouveauté : prise en charge de « WHERE ... = » dans les requetes « SELECT »', "bleu")
+        print('dernière nouveauté : prise en charge des opérateurs de comparaison dans les requetes « SELECT »', "bleu")
         print('(mais pas encore de « AND » et « OR »)', "bleu")
-        
+        print('>', "requete")
         /*
          * traite le mot-clé mysql 'SELECT'
          */
@@ -808,12 +969,16 @@
         function checkWhere(R) {
             R.whereList.forEach(e => {
                 if (e.A.delimiteur) {
-                    if (e.A.delimiteur != 'quotes' && e.A.delimiteur != 'number') {throw `La paramètre ${e.A.nom} est innatendu`}
+                    if (['quotes','number','date'].indexOf(e.A.delimiteur) == -1) {
+                        throw `La paramètre ${e.A.nom} est inattendu`
+                    }
                 } else {
                     e.A = findColumn(setColumn(e.A.nom), R.tablesList)
                 }
                 if (e.B.delimiteur) {
-                    if (e.B.delimiteur != 'quotes' && e.B.delimiteur != 'number') {throw `La paramètre ${e.B.nom} est innatendu`}
+                    if (['quotes','number','date'].indexOf(e.B.delimiteur) == -1) {
+                        throw `La paramètre ${e.B.nom} est inattendu`
+                    }
                 } else {
                     e.B = findColumn(setColumn(e.B.nom), R.tablesList)
                 }
