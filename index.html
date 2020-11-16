@@ -36,6 +36,17 @@
             white-space: pre;
             margin: 0px;
         }
+        .clignote  {
+           animation-duration: 1s;
+           animation-name: clignoter;
+           animation-iteration-count: infinite;
+           transition: none;
+        }
+        @keyframes clignoter {
+          0%   { opacity:1; }
+          40%  { opacity:0; }
+          100% { opacity:1; }
+        }
         .requete {
             white-space: normal;
             color: #00ff00;
@@ -222,6 +233,18 @@
             } else {
                 p.className = "console "
             }
+            div.appendChild(p)
+            div.scrollTop = div.scrollHeight;
+        }
+        
+        /*
+         * affiche un prompt et une barre clignotante
+         */
+        function prompt() {
+            const div = document.getElementById("reponse")
+            const p = document.createElement("p")
+            p.innerHTML = '&gt;<font class="clignote">|</font>'
+            p.className = "console requete"
             div.appendChild(p)
             div.scrollTop = div.scrollHeight;
         }
@@ -426,8 +449,8 @@
                 parseSQL(raw.replace(/[\n\t\r]/gi,""))
             } catch (e) {
                 print(e, "rouge")
-                print(">", "requete")
             }
+            prompt()
         }
         
         /*
@@ -574,7 +597,6 @@
                 "SELECT": select
             }
             applyNextKeyword(R, firstKeyword)
-            print(">", "requete")
         }
         
         /*
@@ -809,7 +831,7 @@
         print('Base de données en mode « Bac à sable » prête !', "bleu")
         print('dernière nouveauté : prise en charge des opérateurs de comparaison dans les requetes « SELECT »', "bleu")
         print('(mais pas encore de « AND » et « OR »)', "bleu")
-        print('>', "requete")
+        prompt()
         /*
          * traite le mot-clé mysql 'SELECT'
          */
