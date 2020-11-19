@@ -77,11 +77,18 @@
                 this.nom = nom
                 this.tables = {}
             }
-            addTable(nom, base) {
+            addTable(nom) {
                 if (this.tables[nom]) {
-                    console.log(`La base "${this.nom}" comporte déjà une table nomée "${nom}"`)
+                    throw `La base "${this.nom}" comporte déjà une table nomée "${nom}"`
                 } else {
                     this.tables[nom] = new Table(nom, this)
+                }
+            }
+            removeTable(nom) {
+                if (this.tables[nom]) {
+                    delete this.tables[nom]
+                } else {
+                    throw `Il n'y a aucune table "${nom}" dans la base "${this.nom}"`
                 }
             }
         }
@@ -95,7 +102,7 @@
             }
             addColumn(nom, type) {
                 if (this.columns[nom]) {
-                    console.log(`La table "${this.nom}" comporte déjà une colonne nomée "${nom}".`)
+                    throw `La table "${this.nom}" comporte déjà une colonne nomée "${nom}".`
                 } else {
                     this.columns[nom] = new Column(nom, type, this)
                 }
@@ -103,9 +110,9 @@
             addData(element) {
                 const colonneInconnue = Object.keys(element).filter(key => !this.columns[key])
                 if (colonneInconnue.length == 1) {
-                    console.log(`La table "${this.nom}" ne comporte pas de colonne "${colonneInconnue[0]}".`)
+                    throw `La table "${this.nom}" ne comporte pas de colonne "${colonneInconnue[0]}".`
                 } else if (colonneInconnue.length > 1) {
-                    console.log(`La table "${this.nom}" ne comporte pas de colonnes "${colonneInconnue.join(', ')}".`)
+                    throw `La table "${this.nom}" ne comporte pas de colonnes "${colonneInconnue.join(', ')}".`
                 } else {
                     this.data.push(element)
                     for (const key in element) {
@@ -437,6 +444,10 @@
                     execute(R)
                 }
             }
+            if (index == 0) {
+                const div = document.getElementById("reponse")
+                div.removeChild(div.lastChild);
+            }
         }
         
         /*
@@ -594,7 +605,8 @@
                 "USE": use,
                 "DESC": describe,
                 "DESCRIBE": describe,
-                "SELECT": select
+                "SELECT": select,
+                "CREATE": create,
             }
             applyNextKeyword(R, firstKeyword)
         }
@@ -602,8 +614,8 @@
         /*
          * fonctions de comparaison
          */
-        class Egal {
-            constructor(A, B, not) {
+        class ComparateurUnaire {
+            constructor(A, B, not, comparateur) {
                 this.A = A
                 this.B = B
                 this.not = not
@@ -619,135 +631,20 @@
                     } else {
                         b = E[this.B.table.nom][this.B.nom]
                     }
-                    const reponse = this.not ? a != b : a == b
-                    return reponse
-                }
-            }
-        }
-
-        class Different {
-            constructor(A, B, not) {
-                this.A = A
-                this.B = B
-                this.not = not
-                this.f = (E) => {
-                    var a, b
-                    if (this.A.delimiteur) {
-                        a = this.A.nom
-                    } else {
-                        a = E[this.A.table.nom][this.A.nom]
-                    }
-                    if (this.B.delimiteur) {
-                        b = this.B.nom
-                    } else {
-                        b = E[this.B.table.nom][this.B.nom]
-                    }
-                    const reponse = this.not ? a == b : a != b
-                    return reponse
-                }
-            }
-        }
-
-        class Superieur {
-            constructor(A, B, not) {
-                this.A = A
-                this.B = B
-                this.not = not
-                this.f = (E) => {
-                    var a, b
-                    if (this.A.delimiteur) {
-                        a = this.A.nom
-                    } else {
-                        a = E[this.A.table.nom][this.A.nom]
-                    }
-                    if (this.B.delimiteur) {
-                        b = this.B.nom
-                    } else {
-                        b = E[this.B.table.nom][this.B.nom]
-                    }
-                    const reponse = this.not ? a <= b : a > b
-                    return reponse
-                }
-            }
-        }
-
-        class SuperieurEgal {
-            constructor(A, B, not) {
-                this.A = A
-                this.B = B
-                this.not = not
-                this.f = (E) => {
-                    var a, b
-                    if (this.A.delimiteur) {
-                        a = this.A.nom
-                    } else {
-                        a = E[this.A.table.nom][this.A.nom]
-                    }
-                    if (this.B.delimiteur) {
-                        b = this.B.nom
-                    } else {
-                        b = E[this.B.table.nom][this.B.nom]
-                    }
-                    const reponse = this.not ? a < b : a >= b
-                    return reponse
-                }
-            }
-        }
-
-        class Inferieur {
-            constructor(A, B, not) {
-                this.A = A
-                this.B = B
-                this.not = not
-                this.f = (E) => {
-                    var a, b
-                    if (this.A.delimiteur) {
-                        a = this.A.nom
-                    } else {
-                        a = E[this.A.table.nom][this.A.nom]
-                    }
-                    if (this.B.delimiteur) {
-                        b = this.B.nom
-                    } else {
-                        b = E[this.B.table.nom][this.B.nom]
-                    }
-                    const reponse = this.not ? a >= b : a < b
-                    return reponse
-                }
-            }
-        }
-
-        class InferieurEgal {
-            constructor(A, B, not) {
-                this.A = A
-                this.B = B
-                this.not = not
-                this.f = (E) => {
-                    var a, b
-                    if (this.A.delimiteur) {
-                        a = this.A.nom
-                    } else {
-                        a = E[this.A.table.nom][this.A.nom]
-                    }
-                    if (this.B.delimiteur) {
-                        b = this.B.nom
-                    } else {
-                        b = E[this.B.table.nom][this.B.nom]
-                    }
-                    const reponse = this.not ? a > b : a <= b
+                    const reponse = this.not ? !comparateur(a, b) : comparateur(a, b)
                     return reponse
                 }
             }
         }
         
         const dicoCompare = {
-            '=': Egal,
-            '!=': Different,
-            '<>': Different,
-            '>': Superieur,
-            '<': Inferieur,
-            '>=': SuperieurEgal,
-            '<=': InferieurEgal
+            '=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a==b),
+            '!=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a!=b),
+            '<>': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a!=b),
+            '>': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a>b),
+            '<': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a<b),
+            '>=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a>=b),
+            '<=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a<=b),
         }
         
         function different(A, B) {return A != B}
@@ -811,6 +708,9 @@
             const nom = getNameFromToken(R)
             R.index += 1
             currentDatabase = findDatabase(nom)
+            if (existNextToken(R)) {
+                throw `Le mot-clé ${getNameFromToken(R)} innatendu`
+            }
             print(`La base de données "${nom}" a bien été selectionnée.`)
         }
         
@@ -979,7 +879,7 @@
             const symbole = getNextToken(R).nom
             if (dicoCompare[symbole]) {
                 const B = getNextToken(R)
-                R.whereList.push(new dicoCompare[symbole](A, B))
+                R.whereList.push(dicoCompare[symbole](A, B))
             } else {
                 throw `Comparaison ${symbole} pas encore gérée...`
             }
@@ -1098,6 +998,54 @@
             const largeurs = R.columnsList.map(col => col.maxLength)
             const data = R.combinaisons.map(elem => R.columnsList.map(col => elem[col.table.nom][col.nom]))
             printTable(entete, data, largeurs, R.distinct)
+        }
+        
+        /*
+         * traite le mot-clé mysql 'CREATE'
+         */
+        function create(R) {
+            const nextKeywords = {
+                "DATABASE": createDatabase,
+                "TABLE": createTable
+            }
+            applyNextKeyword(R, nextKeywords)
+        }
+        
+        function createDatabase(R) {
+            const nom = getNameFromToken(R)
+            R.index += 1
+            try {
+                currentDatabase = findDatabase(nom)
+                throw "existe"
+            } catch (e) {
+                if (e == "existe") {
+                    throw `Une base nommée ${nom} existe déjà.`
+                }
+            }
+            if (existNextToken(R)) {
+                throw `Le mot-clé ${getNameFromToken(R)} innatendu`
+            }
+            databases.push(new Database(nom))
+            print(`La base de données "${nom}" a bien été créée.`)
+        }
+        
+        function createTable(R) {
+            const nom = getNameFromToken(R)
+            R.index += 1
+            if (!currentDatabase) {
+                throw "Aucune base de données n'est sélectionnée."
+            }
+            currentDatabase.addTable(nom)
+            try {
+                /* ici l'ajout des tables une par une */
+            } catch (e) {
+                currentDatabase.removeTable(nom)
+                throw e
+            }
+            if (existNextToken(R)) {
+                throw `Le mot-clé ${getNameFromToken(R)} innatendu`
+            }
+            print(`La table "${nom}" a bien été créée.`)
         }
         
         /*
