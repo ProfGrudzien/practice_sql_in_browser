@@ -442,6 +442,7 @@
                 if (R && R.raw.replace(/[ ]/gi,"") != "") {
                     prepare(R)
                     execute(R)
+                    prompt()
                 }
             }
             if (index == 0) {
@@ -457,11 +458,11 @@
             event.preventDefault()
             try {
                 const raw = document.getElementById("requete").value
-                parseSQL(raw.replace(/[\n\t\r]/gi,""))
+                parseSQL(raw.replace(/[\n\t\r]/gi," "))
             } catch (e) {
                 print(e, "rouge")
+                prompt()
             }
-            prompt()
         }
         
         /*
@@ -724,13 +725,14 @@
             const infos = Object.values(table.columns).map(lbl => [lbl.nom, lbl.type])
             const largeurs = [Math.max(...infos.map(L => L[0].length)),
                               Math.max(...infos.map(L => L[1].length))]
+            if (existNextToken(R)) {
+                throw `Le mot clé ${getNameFromToken(R)} est inattendu`
+            }
             printTable(["COLUMN'S NAME", "TYPE"], infos, largeurs)
         }
 
         document.getElementById("requete-container").addEventListener("submit", interpreter)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
-        print('dernière nouveauté : prise en charge des opérateurs de comparaison dans les requetes « SELECT »', "bleu")
-        print('(mais pas encore de « AND » et « OR »)', "bleu")
         prompt()
         /*
          * traite le mot-clé mysql 'SELECT'
