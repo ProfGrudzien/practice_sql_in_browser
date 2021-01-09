@@ -60,16 +60,102 @@
         .bleu {
             color: #8888ff;
         }
+        .droite {
+            text-align: right
+        }
+        .modal-container {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            background: rgba(0, 0, 0, 0.7);
+        }
+        .modal {
+            position: relative;
+            width: 95%;
+            max-width: 650px;
+            min-height: 415px;
+            margin: 10px auto auto;
+            padding-bottom: 15px;
+            background: rgba(255, 255, 255, 1);
+            border-radius: 0.25em;
+            border: 1px solid rgba(100, 100, 100, 0.3);
+            color: rgba(6, 49, 68, 0.9);
+        }
+        li {
+            list-style: none;
+        }
+        li.code {
+            margin-left: 50px;
+            margin-bottom: 10px;
+        }
+        input[type="submit"], input[type=button] {
+            margin: 3px;
+            background-color: #eeeeee;
+            color: black;
+            border: 1px solid black;
+        }
     </style>
 </head>
 
 <body>
+    <div class="droite">
+        <input type="button" value="Aide" id="btnAide"/>
+    </div>
     <div id="reponse"></div>
     <form id="requete-container">
         <textarea id="requete" rows=3></textarea>
         <input type="submit" value="Envoyer la requête." />
     </form>
+    <div class="modal-container">
+        <div class="modal">
+            <div class="droite">
+                <input type="button" value="&#10060;" id="btnQuitModal"/>
+            </div>
+            <ul>
+                <li>Lister les bases de données disponibles :</li>
+                <li class="code">SHOW databases;</li>
+                <li>Sélectionner la base de données à utiliser :</li>
+                <li class="code">USE &lt;nom de la base de données&gt;;</li>
+                <li>Lister les tables de la base de données selectionnée :</li>
+                <li class="code">SHOW tables;</li>
+                <li>Lister le nom et le type des colonnes d'une table :</li>
+                <li class="code">DESCRIBE &lt;nom de la table&gt;;</li>
+                <li>Afficher les enregistrements d'une table (toutes les colonnes) :</li>
+                <li class="code">SELECT * FROM &lt;nom de la table&gt;;</li>
+                <li>Afficher les enregistrements d'une table (une seule colonne) :</li>
+                <li class="code">SELECT &lt;nom de la colonne&gt; FROM &lt;nom de la table&gt;;</li>
+                <li>Afficher les enregistrements d'une table (quelques colonnes) :</li>
+                <li class="code">SELECT &lt;nom de la premiere colonne&gt;, &lt;nom de la deuxième colonne&gt;, &mldr;, &lt;nom de la dernière colonne&gt; FROM &lt;nom de la table&gt;;</li>
+                <li>Afficher les enregistrements différents d'une table :</li>
+                <li class="code">SELECT DISTINCT &lt;nom de la colonne&gt; FROM &lt;nom de la table&gt;;</li>
+                <li>Afficher les enregistrements d'une table, triés dans l'ordre croissant d'une colonne :</li>
+                <li class="code">SELECT * FROM &lt;nom de la table&gt; ORDER BY &lt;nom de la colonne&gt;;</li>
+                <li>Afficher les enregistrements d'une table, triés dans l'ordre décroissant d'une colonne :</li>
+                <li class="code">SELECT * FROM &lt;nom de la table&gt; ORDER BY &lt;nom de la colonne&gt; DESC;</li>
+                <li>Afficher les enregistrements d'une table, filtrés grâce à une condition sur les valeurs d'une colonne :</li>
+                <li class="code">SELECT * FROM &lt;nom de la table&gt; WHERE &lt;condition&gt; ;</li>
+            </ul>
+        </div>
+    </div>
     <script language="javascript">
+        /* AIDE */
+        document.getElementById("btnAide").addEventListener("click", showAide)
+        document.getElementById("btnQuitModal").addEventListener("click", hideAide)
+        const modal = document.querySelector(".modal-container")
+        function showAide(event) {
+            modal.style.display = "initial";
+        }
+        function hideAide(event) {
+            modal.style.display = "none"
+        }
+        modal.style.display = "none"
+    
+        /* ENVOYER LA REQUETE */
+        document.getElementById("requete-container").addEventListener("submit", interpreter)
+        print('Base de données en mode « Bac à sable » prête !', "bleu")
+        prompt()
         const databases = []
         var currentDatabase = null
         class Database {
@@ -730,10 +816,7 @@
             }
             printTable(["COLUMN'S NAME", "TYPE"], infos, largeurs)
         }
-
-        document.getElementById("requete-container").addEventListener("submit", interpreter)
-        print('Base de données en mode « Bac à sable » prête !', "bleu")
-        prompt()
+        
         /*
          * traite le mot-clé mysql 'SELECT'
          */
