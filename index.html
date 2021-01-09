@@ -207,9 +207,9 @@
                     const preelem2 = obj2[col.table.nom][col.nom]
                     const elem2 = typeof preelem2 == "string" ? preelem2.toUpperCase() : preelem2
                     if (elem1 < elem2) {
-                        return desc[i] ? false : true
+                        return desc[i] ? -1 : 1
                     } else if (elem1 > elem2) {
-                        return desc[i] ? true : false
+                        return desc[i] ? 1 : -1
                     }
                 }
                 return true
