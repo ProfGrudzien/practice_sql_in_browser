@@ -14,3 +14,18 @@ Vous pouvez par exemple tester les commandes suivantes :
 + SELECT * FROM tourne;
 + SELECT nom, diffuseur FROM series ORDER BY diffuseur;
 + SELECT acteurs.nom FROM acteurs;
+
+Les prochaines étapes sont :
+
++ ajout des mots clés LIMIT et OFFSET pour les requêtes SELECT
++ ajout du mot clé AS pour les requêtes SELECT
++ condition IS NULL
+
+Puis dans un futur plus loingtain :
+
++ création / suppression d'une base de données
++ création / suppression d'une table (simple dans un premier temps)
++ ajout / modification / suppression d'enregistrements
++ déclaration des clés étrangères
++ possibilité d'importer un fichier contenant des requêtes SQL
++ possibilité de télécharger une base de données sous la forme d'un fichier texte contenant les requêtes necessaires.
