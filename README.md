@@ -14,14 +14,14 @@ Vous pouvez par exemple tester les commandes suivantes :
 + SELECT * FROM tourne;
 + SELECT nom, diffuseur FROM series ORDER BY diffuseur;
 + SELECT acteurs.nom FROM acteurs;
++ SELECT acteurs.nom FROM acteurs LIMIT 3 OFFSET 5;
 
 Les prochaines étapes sont :
 
-+ ajout des mots clés LIMIT et OFFSET pour les requêtes SELECT
 + ajout du mot clé AS pour les requêtes SELECT
 + condition IS NULL
 
-Puis dans un futur plus loingtain :
+Puis dans un futur plus lointain :
 
 + création / suppression d'une base de données
 + création / suppression d'une table (simple dans un premier temps)
