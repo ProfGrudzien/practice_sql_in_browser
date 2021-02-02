@@ -74,7 +74,7 @@
         .modal {
             position: relative;
             width: 95%;
-            max-width: 700px;
+            max-width: 650px;
             min-height: 415px;
             margin: 10px auto auto;
             padding-bottom: 15px;
@@ -204,9 +204,6 @@
                     for (const key in element) {
                         const newLength = element[key].toString().length
                         const column = this.columns[key]
-                        if (column.maxLength < newLength) {
-                            column.maxLength = newLength
-                        }
                     }
                 }
             }
@@ -217,7 +214,6 @@
                 this.type = type
                 this.nom = nom
                 this.table = table
-                this.maxLength = nom.length
             }
         }
 
@@ -251,6 +247,8 @@
                 this.orderByList = []
                 this.descList = []
                 this.combinaisons = []
+                this.limite = null
+                this.offset = 0
             }
         }
 
@@ -345,9 +343,15 @@
         /*
          * affiche des données sous la forme d'un tableau dans le cadre 'réponse'
          */
-        function printTable(entete, data, largeurs, distinct) {
+        function printTable(entete, data, distinct) {
+            const largeurs = []
             for (i=0; i<entete.length; i++) {
-                largeurs[i] = Math.max(largeurs[i], entete[i].toString().length)
+                largeurs.push(entete[i].toString().length)
+                for (j=0; j<data.length; j++) {
+                    if (largeurs[i] < data[j][i].toString().length) {
+                        largeurs[i] = data[j][i].toString().length
+                    }
+                }
             }
             const ligne = "+" + largeurs.map(l => '-'.repeat(l+2)).join("+") + "+"
             print(ligne)
@@ -542,12 +546,14 @@
          */
         function interpreter(event) {
             event.preventDefault()
-            try {
-                const raw = document.getElementById("requete").value
-                parseSQL(raw.replace(/[\n\t\r]/gi," "))
-            } catch (e) {
-                print(e, "rouge")
-                prompt()
+            const raw = document.getElementById("requete").value
+            if (raw != "") {
+                try {
+                    parseSQL(raw.replace(/[\n\t\r]/gi," "))
+                } catch (e) {
+                    print(e, "rouge")
+                    prompt()
+                }
             }
         }
         
@@ -756,6 +762,16 @@
         }
         
         /*
+         * fonctions de contrôle
+         */
+        function is_int(value){
+            if((parseFloat(value) == parseInt(value)) && !isNaN(value)){ 
+                return true;
+            }
+            return false;
+        }
+        
+        /*
          * traite le mot-clé mysql 'SHOW'
          */
         function show(R) {
@@ -771,8 +787,7 @@
          */
         function showDatabases(R) {
             const dbList = databases.map(db => [db.nom])
-            const largeur = Math.max(...dbList.map(nom => nom.toString().length))
-            printTable(["DATABASES"], dbList, [largeur], false)
+            printTable(["DATABASES"], dbList, false)
         }
         
         /*
@@ -781,8 +796,7 @@
         function showTables(R) {
             if (currentDatabase) {
                 const tablesList = Object.keys(currentDatabase.tables).map(nom => [nom])
-                const largeur = Math.max(...tablesList.map(L => L[0].length))
-                printTable([`TABLES in ${currentDatabase.nom}`], tablesList, [largeur], false)
+                printTable([`TABLES in ${currentDatabase.nom}`], tablesList, false)
             } else {
                 throw "Aucune base de données sélectionnée."
             }
@@ -814,7 +828,7 @@
             if (existNextToken(R)) {
                 throw `Le mot clé ${getNameFromToken(R)} est inattendu`
             }
-            printTable(["COLUMN'S NAME", "TYPE"], infos, largeurs)
+            printTable(["COLUMN'S NAME", "TYPE"], infos)
         }
         
         /*
@@ -856,6 +870,8 @@
             checkColumns(R)
             selectWhere(R)
             selectOrderBy(R)
+            selectLimit(R)
+            selectOffset(R)
             showSelectResults(R)
         }
         
@@ -1072,6 +1088,47 @@
             R.combinaisons.sort(tri(R.orderByList, R.descList))
         }
         
+        
+        /*
+         * cherche et sauvegarde le nombre de résultats à afficher
+         */
+        function selectLimit(R) {
+            if (existNextToken(R)) {
+                if (getNameFromToken(R).toUpperCase() == "LIMIT") {
+                    R.index += 1
+                    const next = getNextToken(R)
+                    if (is_int(next.nom)) {
+                        if (parseInt(next.nom) < 0) {
+                            throw "Requête invalide, un nombre entier positif est attendu dans la clause « LIMIT »"
+                        }
+                        R.limit = parseInt(next.nom)
+                    } else {
+                        throw "Requête invalide, un nombre entier est attendu dans la clause « LIMIT »"
+                    }
+                }
+            }
+        }
+        
+        /*
+         * cherche et sauvegarde le nombre de résultats à ignorer
+         */
+        function selectOffset(R) {
+            if (existNextToken(R)) {
+                if (getNameFromToken(R).toUpperCase() == "OFFSET") {
+                    R.index += 1
+                    const next = getNextToken(R)
+                    if (is_int(next.nom)) {
+                        if (parseInt(next.nom) < 0) {
+                            throw "Requête invalide, un nombre entier positif est attendu dans la clause « OFFSET »"
+                        }
+                        R.offset = parseInt(next.nom)
+                    } else {
+                        throw "Requête invalide, un nombre entier est attendu dans la clause « OFFSET »"
+                    }
+                }
+            }
+        }
+        
         /*
          * affiche uniquement les colonnes désirées
          */
@@ -1080,9 +1137,12 @@
                 throw `Mot clé "${getNameFromToken(R)}" inattendu`
             }
             const entete = R.columnsAliasList
-            const largeurs = R.columnsList.map(col => col.maxLength)
             const data = R.combinaisons.map(elem => R.columnsList.map(col => elem[col.table.nom][col.nom]))
-            printTable(entete, data, largeurs, R.distinct)
+            if (R.limit ==  null) {
+                printTable(entete, data.splice(R.offset), R.distinct)
+            } else {
+                printTable(entete, data.splice(R.offset, R.limit), R.distinct)
+            }
         }
         
         /*
