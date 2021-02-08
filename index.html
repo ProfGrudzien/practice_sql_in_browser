@@ -165,7 +165,7 @@
             }
             addTable(nom) {
                 if (this.tables[nom]) {
-                    throw `La base "${this.nom}" comporte déjà une table nomée "${nom}"`
+                    throw `La base « ${this.nom} » comporte déjà une table nomée « ${nom} »`
                 } else {
                     this.tables[nom] = new Table(nom, this)
                 }
@@ -174,7 +174,7 @@
                 if (this.tables[nom]) {
                     delete this.tables[nom]
                 } else {
-                    throw `Il n'y a aucune table "${nom}" dans la base "${this.nom}"`
+                    throw `Il n'y a aucune table « ${nom} » dans la base « ${this.nom} »`
                 }
             }
         }
@@ -188,7 +188,7 @@
             }
             addColumn(nom, type) {
                 if (this.columns[nom]) {
-                    throw `La table "${this.nom}" comporte déjà une colonne nomée "${nom}".`
+                    throw `La table « ${this.nom} » comporte déjà une colonne nomée « ${nom} ».`
                 } else {
                     this.columns[nom] = new Column(nom, type, this)
                 }
@@ -196,9 +196,9 @@
             addData(element) {
                 const colonneInconnue = Object.keys(element).filter(key => !this.columns[key])
                 if (colonneInconnue.length == 1) {
-                    throw `La table "${this.nom}" ne comporte pas de colonne "${colonneInconnue[0]}".`
+                    throw `La table « ${this.nom} » ne comporte pas de colonne « ${colonneInconnue[0]} ».`
                 } else if (colonneInconnue.length > 1) {
-                    throw `La table "${this.nom}" ne comporte pas de colonnes "${colonneInconnue.join(', ')}".`
+                    throw `La table « ${this.nom} » ne comporte pas de colonnes « ${colonneInconnue.join(', ')} ».`
                 } else {
                     this.data.push(element)
                     for (const key in element) {
@@ -389,15 +389,23 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `raw` à la recherche d'un ; à partir de la position `index`
+         * Parcours la chaine de caractère `raw` à la recherche de parenthèse à partir de la position `index`
          * Retourne une erreur si le caractère ; n'est pas trouvé
          */
         function searchParentheses(R) {
+            var nombreParenthese = 1
             R.index += 1
             var txt = ""
-            while (R.raw[R.index] && R.raw[R.index] != ")") {
-                txt += R.raw[R.index]
-                R.index += 1
+            while (R.raw[R.index] && nombreParenthese > 0) {
+                if (R.raw[R.index] == ")") {
+                    nombreParenthese += -1
+                } else if (R.raw[R.index] == "(") {
+                    nombreParenthese += 1
+                }
+                if (nombreParenthese > 0) {
+                    txt += R.raw[R.index]
+                    R.index += 1
+                }
             }
             if (R.raw[R.index]) {
                 R.tokensList.push(new Token(txt, 'parentheses'))
@@ -812,7 +820,7 @@
             if (existNextToken(R)) {
                 throw `Le mot-clé ${getNameFromToken(R)} innatendu`
             }
-            print(`La base de données "${nom}" a bien été selectionnée.`)
+            print(`La base de données « ${nom} » a bien été selectionnée.`)
         }
         
         /*
@@ -919,7 +927,7 @@
                     }
                 }
             } else {
-                throw `Mot clé "${token}" inattendu`
+                throw `Le mot clé « ${token} » est inattendu`
             }
             R.index += -1
         }
@@ -982,7 +990,7 @@
                 const B = getNextToken(R)
                 R.whereList.push(dicoCompare[symbole](A, B))
             } else {
-                throw `Comparaison ${symbole} pas encore gérée...`
+                throw `Comparaison « ${symbole} » pas encore gérée...`
             }
         }
         
@@ -993,14 +1001,14 @@
             R.whereList.forEach(e => {
                 if (e.A.delimiteur) {
                     if (['quotes','number','date'].indexOf(e.A.delimiteur) == -1) {
-                        throw `La paramètre ${e.A.nom} est inattendu`
+                        throw `La paramètre « ${e.A.nom} » est inattendu`
                     }
                 } else {
                     e.A = findColumn(setColumn(e.A.nom), R.tablesList)
                 }
                 if (e.B.delimiteur) {
                     if (['quotes','number','date'].indexOf(e.B.delimiteur) == -1) {
-                        throw `La paramètre ${e.B.nom} est inattendu`
+                        throw `La paramètre « ${e.B.nom} » est inattendu`
                     }
                 } else {
                     e.B = findColumn(setColumn(e.B.nom), R.tablesList)
@@ -1134,7 +1142,7 @@
          */
         function showSelectResults(R) {
             if (existNextToken(R)) {
-                throw `Mot clé "${getNameFromToken(R)}" inattendu`
+                throw `Mot clé « ${getNameFromToken(R)} » inattendu`
             }
             const entete = R.columnsAliasList
             const data = R.combinaisons.map(elem => R.columnsList.map(col => elem[col.table.nom][col.nom]))
@@ -1164,14 +1172,14 @@
                 throw "existe"
             } catch (e) {
                 if (e == "existe") {
-                    throw `Une base nommée ${nom} existe déjà.`
+                    throw `Une base nommée « ${nom} » existe déjà.`
                 }
             }
             if (existNextToken(R)) {
-                throw `Le mot-clé ${getNameFromToken(R)} innatendu`
+                throw `Le mot-clé ${getNameFromToken(R)} est innatendu`
             }
             databases.push(new Database(nom))
-            print(`La base de données "${nom}" a bien été créée.`)
+            print(`La base de données « ${nom} » a bien été créée.`)
         }
         
         function createTable(R) {
@@ -1181,16 +1189,38 @@
                 throw "Aucune base de données n'est sélectionnée."
             }
             currentDatabase.addTable(nom)
+            const table = currentDatabase.tables[nom]
             try {
-                /* ici l'ajout des tables une par une */
+                const token = getNextToken(R)
+                const L = token.nom.split(',').map(elem => elem.split(" "))
+                L.forEach(elem => {
+                    if (elem.length != 2) {
+                        throw `Erreur lors de la lecture des tables : ${elem.join(" ")}`
+                    }
+                    /* vérification du type */
+                    const regExpAvecParentheses = /^([a-z]+)\([0-9]*\)$/i
+                    const regExpSansParentheses = /^[a-z]+$/i
+                    if (regExpSansParentheses.test(elem[1])) {
+                        type = elem[1]
+                    } else if (regExpAvecParentheses.test(elem[1])) {
+                        type = elem[1].match(regExpAvecParentheses)[1]
+                    } else {
+                        throw `Erreur lors de la lecture du type de la table : ${elem[0]}`
+                    }
+                    if (["CHAR", "VARCHAR", "SMALLINT", "INT", "INTEGER", "FLOAT", "DECIMAL", "DATE"].indexOf(type.toUpperCase())<0) {
+                        throw `Le type « ${type} » n'est pas reconnu.`
+                    }
+                    /* création de la colonne */
+                    table.addColumn(elem[0], type)
+                })
+                if (existNextToken(R)) {
+                    throw `Le mot-clé « ${getNameFromToken(R)} » est innatendu`
+                }
             } catch (e) {
                 currentDatabase.removeTable(nom)
                 throw e
             }
-            if (existNextToken(R)) {
-                throw `Le mot-clé ${getNameFromToken(R)} innatendu`
-            }
-            print(`La table "${nom}" a bien été créée.`)
+            print(`La table « ${nom} » a bien été créée.`)
         }
         
         /*
