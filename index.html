@@ -679,7 +679,7 @@
         
         /*
          * sépare le nom de la table du nom de la colonne.
-         * retourne un objet décrivant la table et un alias
+         * retourne un objet décrivant la table
          */
         function setColumn(nom) {
             const liste = nom.split(".")
@@ -716,7 +716,26 @@
          * fonctions de comparaison
          */
         class ComparateurUnaire {
+            constructor(A, not, comparateur) {
+                this.binaire = false
+                this.A = A
+                this.not = not
+                this.f = (E) => {
+                    var a
+                    if (this.A.delimiteur) {
+                        a = this.A.nom
+                    } else {
+                        a = E[this.A.table.nom][this.A.nom]
+                    }
+                    const reponse = this.not ? !comparateur(a) : comparateur(a)
+                    return reponse
+                }
+            }
+        }
+
+        class ComparateurBinaire {
             constructor(A, B, not, comparateur) {
+                this.binaire = true
                 this.A = A
                 this.B = B
                 this.not = not
@@ -739,20 +758,14 @@
         }
         
         const dicoCompare = {
-            '=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a==b),
-            '!=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a!=b),
-            '<>': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a!=b),
-            '>': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a>b),
-            '<': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a<b),
-            '>=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a>=b),
-            '<=': (A, B, not) => new ComparateurUnaire(A, B, not, (a, b) => a<=b),
+            '=': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a==b),
+            '!=': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a!=b),
+            '<>': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a!=b),
+            '>': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a>b),
+            '<': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a<b),
+            '>=': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a>=b),
+            '<=': (A, B, not) => new ComparateurBinaire(A, B, not, (a, b) => a<=b),
         }
-        
-        function different(A, B) {return A != B}
-        function superieur(A, B) {return A > B}
-        function inferieur(A, B) {return A < B}
-        function superieurEgal(A, B) {return A >= B}
-        function inferieurEgal(A, B) {return A <= B}
         function appartientA(A, L) {return L.indexOf(A) > -1}
         function entre(A, m, M) {return A >= m && A <= M}
         function like(A, S) {
@@ -894,7 +907,14 @@
                     const col = setColumn(next.nom)
                     R.columnsNamesList.push(col)
                     if (next.nom.indexOf("*") == -1) {
-                        R.columnsAliasList.push(next.nom)
+                        const mot_cle = getNameFromToken(R)
+                        if (mot_cle.toUpperCase() == "AS") {
+                            R.index += 1
+                            next = getNextToken(R)
+                            R.columnsAliasList.push(next.nom)
+                        } else {
+                            R.columnsAliasList.push(next.nom)
+                        }
                     }
                     next = getNextToken(R)
                 } else {
@@ -982,15 +1002,32 @@
          * recherche les comparaisons pour un WHERE
          */
         function exploreWhere(R) {
-            const not = (getNameFromToken(R).toUpperCase() == "ORDER")
-            if (not) {R.index += 1}
             const A = getNextToken(R)
             const symbole = getNextToken(R).nom
-            if (dicoCompare[symbole]) {
+            const not = false
+            if (symbole.toUpperCase() == "IS") {
+                var next = getNextToken(R)
+                if (next.nom.toUpperCase() == "NULL") {
+                    R.whereList.push(new ComparateurUnaire(A, not, (a) => a = null))
+                } else if (next.nom.toUpperCase() == "NOT") {
+                    next = getNextToken(R)
+                    if (next.nom.toUpperCase() == "NULL") {
+                        R.whereList.push(new ComparateurUnaire(A, not, (a) => a != null))
+                    } else {
+                        throw "Condition non comprise"
+                }
+                } else {
+                    throw "Condition non comprise"
+                }
+            } else if (dicoCompare[symbole]) {
                 const B = getNextToken(R)
-                R.whereList.push(dicoCompare[symbole](A, B))
+                R.whereList.push(dicoCompare[symbole](A, B, not))
             } else {
                 throw `Comparaison « ${symbole} » pas encore gérée...`
+            }
+            if (existNextToken(R) && getNameFromToken(R).toUpperCase() == "AND") {
+                R.index += 1
+                exploreWhere(R)
             }
         }
         
@@ -1006,12 +1043,14 @@
                 } else {
                     e.A = findColumn(setColumn(e.A.nom), R.tablesList)
                 }
-                if (e.B.delimiteur) {
-                    if (['quotes','number','date'].indexOf(e.B.delimiteur) == -1) {
-                        throw `La paramètre « ${e.B.nom} » est inattendu`
+                if (e.binaire) {
+                    if (e.B.delimiteur) {
+                        if (['quotes','number','date'].indexOf(e.B.delimiteur) == -1) {
+                            throw `La paramètre « ${e.B.nom} » est inattendu`
+                        }
+                    } else {
+                        e.B = findColumn(setColumn(e.B.nom), R.tablesList)
                     }
-                } else {
-                    e.B = findColumn(setColumn(e.B.nom), R.tablesList)
                 }
             })
         }
@@ -1020,7 +1059,9 @@
          * filtres les données grâces aux comparaisons
          */
         function applyWhere(R) {
-            R.combinaisons = R.combinaisons.filter(E => R.whereList[0].f(E))
+            R.whereList.forEach(where => {
+                R.combinaisons = R.combinaisons.filter(E => where.f(E))
+            })
         }
         
         /*
