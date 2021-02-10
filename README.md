@@ -18,7 +18,8 @@ Vous pouvez par exemple tester les commandes suivantes :
 
 Les prochaines étapes sont :
 
-+ ajout du mot clé AS pour les requêtes SELECT
++ ajout du mot clé OR pour la close WHERE
++ ajout des parenthèses dans la close WHERE
 + condition IS NULL
 
 Puis dans un futur plus lointain :
