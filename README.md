@@ -20,7 +20,6 @@ Les prochaines étapes sont :
 
 + ajout du mot clé OR pour la close WHERE
 + ajout des parenthèses dans la close WHERE
-+ condition IS NULL
 
 Puis dans un futur plus lointain :
 
