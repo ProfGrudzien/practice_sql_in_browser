@@ -20,9 +20,6 @@ Les prochaines étapes sont :
 
 + ajout du mot clé OR pour la close WHERE
 + ajout des parenthèses dans la close WHERE
-
-Puis dans un futur plus lointain :
-
 + création / suppression d'une base de données
 + création / suppression d'une table (simple dans un premier temps)
 + ajout / modification / suppression d'enregistrements
