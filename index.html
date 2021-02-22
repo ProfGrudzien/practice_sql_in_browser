@@ -9,21 +9,7 @@
             font-size: 12pt;
             background-color: white;
         }
-        #requete {
-            border: 1px solid black;
-            resize: none;
-            width: 590px;
-            margin: 0px;
-            font-size: 12pt;
-            padding: 4px;
-        }
-        #requete-container {
-            text-align: center;
-            width: 600px;
-            margin: 2px auto;
-            padding: 0px
-        }
-        #reponse {
+        #console {
             background-color: black;
             color: white;
             width: 600px;
@@ -32,23 +18,20 @@
             padding: 4px;
             overflow: scroll;
         }
-        .console {
+        p {
             white-space: pre;
             margin: 0px;
         }
-        .clignote  {
-           animation-duration: 1s;
-           animation-name: clignoter;
-           animation-iteration-count: infinite;
-           transition: none;
-        }
-        @keyframes clignoter {
-          0%   { opacity:1; }
-          40%  { opacity:0; }
-          100% { opacity:1; }
-        }
-        .requete {
+        input {
             white-space: normal;
+            color: #00ff00;
+            background: none;
+            border: none;
+            outline: none;
+            font-family: monospace;
+            font-size: 12pt;
+        }
+        label {
             color: #00ff00;
         }
         .vert {
@@ -60,100 +43,18 @@
         .bleu {
             color: #8888ff;
         }
-        .droite {
-            text-align: right
-        }
-        .modal-container {
-            position: fixed;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
-            background: rgba(0, 0, 0, 0.7);
-        }
-        .modal {
-            position: relative;
-            width: 95%;
-            max-width: 650px;
-            min-height: 415px;
-            margin: 10px auto auto;
-            padding-bottom: 15px;
-            background: rgba(255, 255, 255, 1);
-            border-radius: 0.25em;
-            border: 1px solid rgba(100, 100, 100, 0.3);
-            color: rgba(6, 49, 68, 0.9);
-        }
-        li {
-            list-style: none;
-        }
-        li.code {
-            margin-left: 50px;
-            margin-bottom: 10px;
-        }
-        input[type="submit"], input[type=button] {
-            margin: 3px;
-            background-color: #eeeeee;
-            color: black;
-            border: 1px solid black;
-        }
     </style>
 </head>
 
 <body>
-    <div class="droite">
-        <input type="button" value="Aide" id="btnAide"/>
-    </div>
-    <div id="reponse"></div>
-    <form id="requete-container">
-        <textarea id="requete" rows=3></textarea>
-        <input type="submit" value="Envoyer la requête." />
-    </form>
-    <div class="modal-container">
-        <div class="modal">
-            <div class="droite">
-                <input type="button" value="&#10060;" id="btnQuitModal"/>
-            </div>
-            <ul>
-                <li>Lister les bases de données disponibles :</li>
-                <li class="code">SHOW databases;</li>
-                <li>Sélectionner la base de données à utiliser :</li>
-                <li class="code">USE &lt;nom de la base de données&gt;;</li>
-                <li>Lister les tables de la base de données selectionnée :</li>
-                <li class="code">SHOW tables;</li>
-                <li>Lister le nom et le type des colonnes d'une table :</li>
-                <li class="code">DESCRIBE &lt;nom de la table&gt;;</li>
-                <li>Afficher les enregistrements d'une table (toutes les colonnes) :</li>
-                <li class="code">SELECT * FROM &lt;nom de la table&gt;;</li>
-                <li>Afficher les enregistrements d'une table (une seule colonne) :</li>
-                <li class="code">SELECT &lt;nom de la colonne&gt; FROM &lt;nom de la table&gt;;</li>
-                <li>Afficher les enregistrements d'une table (quelques colonnes) :</li>
-                <li class="code">SELECT &lt;nom de la premiere colonne&gt;, &lt;nom de la deuxième colonne&gt;, &mldr;, &lt;nom de la dernière colonne&gt; FROM &lt;nom de la table&gt;;</li>
-                <li>Afficher les enregistrements différents d'une table :</li>
-                <li class="code">SELECT DISTINCT &lt;nom de la colonne&gt; FROM &lt;nom de la table&gt;;</li>
-                <li>Afficher les enregistrements d'une table, triés dans l'ordre croissant d'une colonne :</li>
-                <li class="code">SELECT * FROM &lt;nom de la table&gt; ORDER BY &lt;nom de la colonne&gt;;</li>
-                <li>Afficher les enregistrements d'une table, triés dans l'ordre décroissant d'une colonne :</li>
-                <li class="code">SELECT * FROM &lt;nom de la table&gt; ORDER BY &lt;nom de la colonne&gt; DESC;</li>
-                <li>Afficher les enregistrements d'une table, filtrés grâce à une condition sur les valeurs d'une colonne :</li>
-                <li class="code">SELECT * FROM &lt;nom de la table&gt; WHERE &lt;condition&gt; ;</li>
-            </ul>
-        </div>
-    </div>
+    <div id="console"></div>
     <script language="javascript">
-        /* AIDE */
-        document.getElementById("btnAide").addEventListener("click", showAide)
-        document.getElementById("btnQuitModal").addEventListener("click", hideAide)
-        const modal = document.querySelector(".modal-container")
-        function showAide(event) {
-            modal.style.display = "initial";
-        }
-        function hideAide(event) {
-            modal.style.display = "none"
-        }
-        modal.style.display = "none"
     
         /* ENVOYER LA REQUETE */
-        document.getElementById("requete-container").addEventListener("submit", interpreter)
+        var raw = ""
+        const divConsole = document.getElementById("console")
+        divConsole.addEventListener("click", setFocusToPrompt)
+        divConsole.addEventListener("change", handleChange)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
         prompt()
         const databases = []
@@ -189,9 +90,8 @@
             addColumn(nom, type) {
                 if (this.columns[nom]) {
                     throw `La table « ${this.nom} » comporte déjà une colonne nomée « ${nom} ».`
-                } else {
-                    this.columns[nom] = new Column(nom, type, this)
                 }
+                this.columns[nom] = new Column(nom, type, this)
             }
             addData(element) {
                 const colonneInconnue = Object.keys(element).filter(key => !this.columns[key])
@@ -211,7 +111,22 @@
         
         class Column {
             constructor(nom, type, table) {
+                const dicoTypes = {
+                    "SMALLINT" : (l) => {elem => {elem >= -32768 && elem <= 32767}},
+                    "INT" : (l) => {elem => {elem >= -2147483648 && elem <= 2147483647}},
+                    "CHAR" : (l) => {l ? elem => {elem.length == l} : dicoTypes["CHAR"](1)},
+                    "VARCHAR" : (l) => {l ? elem => {elem.length <= l} : dicoTypes["VARCHAR"](255)},
+                    "DATE" : (l) => { if (l) { throw "Le type « DATE » n'accepte pas de paramètres." } else { return checkDate }}
+                }
+                const regExp = /^([a-z]+)(\(([0-9])*\))?$/i
+                const matchType = type.match(regExp)
+                const nomType = matchType[1] 
+                if (!dicoTypes[nomType]) {
+                    throw `Le type  « ${type} » n'est pas reconnu.`
+                }
                 this.type = type
+                this.longueur = matchType[3]
+                this.controleType = dicoTypes[nomType](this.longueur)
                 this.nom = nom
                 this.table = table
             }
@@ -316,28 +231,33 @@
          * affiche une ligne dans le cadre 'réponse'
          */
         function print(texte, classe) {
-            const div = document.getElementById("reponse")
             const p = document.createElement("p")
             p.textContent = texte
-            if (classe) {
-                p.className = "console " + classe
-            } else {
-                p.className = "console "
-            }
-            div.appendChild(p)
-            div.scrollTop = div.scrollHeight;
+            p.className = classe ? classe : ""
+            divConsole.appendChild(p)
+            divConsole.scrollTop = divConsole.scrollHeight;
+        }
+        
+        /*
+         * Donne le focus au prompt
+         */
+        function setFocusToPrompt(event) {
+            divConsole.lastChild.focus()
         }
         
         /*
          * affiche un prompt et une barre clignotante
          */
         function prompt() {
-            const div = document.getElementById("reponse")
-            const p = document.createElement("p")
-            p.innerHTML = '&gt;<font class="clignote">|</font>'
-            p.className = "console requete"
-            div.appendChild(p)
-            div.scrollTop = div.scrollHeight;
+            const label = document.createElement("label")
+            label.textContent = ">"
+            const input = document.createElement("input")
+            input.type = "text"
+            input.className = "requete"
+            divConsole.appendChild(label)
+            divConsole.appendChild(input)
+            divConsole.scrollTop = divConsole.scrollHeight;
+            input.focus()
         }
         
         /*
@@ -506,62 +426,48 @@
             }
         }
 
-        /* 
-         * Parcours la chaine de caractère `raw` à la recherche d'un ; à partir de la position `index`
-         * Retourne une erreur si le caractère ; n'est pas trouvé
-         */
-        function searchRequest(raw, index) {
-            var req = ""
-            while (raw[index] && raw[index] != ";") {
-                req += raw[index]
-                index += 1
-            }
-            if (raw[index]) {
-                return [new Request(req), index+1]
-            } else if (req.replace(/[ ]/gi,"") != "") {
-                const div = document.getElementById("reponse")
-                div.removeChild(div.lastChild);
-                print("> "+req+";", "requete")
-                throw 'Il manque le caractère de fin de requête « ; »'
-            } else {
-                return [null, index]
-            }
-        }
-
         /*
          * Parcours le texte saisi par l'utilisateur à la recherche de requettes
          * et les contrôle puis les execute au fur et à mesure.
          */
         function parseSQL(raw) {
-            var index = 0
-            var R
-            while (index < raw.length) {
-                [R, index] = searchRequest(raw, index)
-                if (R && R.raw.replace(/[ ]/gi,"") != "") {
-                    prepare(R)
-                    execute(R)
-                    prompt()
-                }
-            }
-            if (index == 0) {
-                const div = document.getElementById("reponse")
-                div.removeChild(div.lastChild);
+            var R = new Request(raw.substring(0, raw.length-1))
+            prepare(R)
+            execute(R)
+            prompt()
+        }
+        
+        /*
+         * Change l'input en une div.
+         * Si la requête fini bien par un ; lance l''interpreter
+         */
+        function handleChange(event) {
+            event.preventDefault()
+            const text = divConsole.lastChild.value.trim()
+            raw = raw + " " + text
+            divConsole.removeChild(divConsole.lastChild)
+            divConsole.removeChild(divConsole.lastChild)
+            const p = document.createElement("p")
+            p.className = "vert"
+            p.textContent = ">" + text
+            divConsole.appendChild(p)
+            if (text[text.length - 1] == ";") {
+                interpreter(raw)
+                raw = ""
+            } else {
+                prompt()
             }
         }
         
         /*
          * Lance la séquence d'interprétation et affiche un message d'erreur si besoin.
          */
-        function interpreter(event) {
-            event.preventDefault()
-            const raw = document.getElementById("requete").value
-            if (raw != "") {
-                try {
-                    parseSQL(raw.replace(/[\n\t\r]/gi," "))
-                } catch (e) {
-                    print(e, "rouge")
-                    prompt()
-                }
+        function interpreter() {
+            try {
+                parseSQL(raw)
+            } catch (e) {
+                print(e, "rouge")
+                prompt()
             }
         }
         
@@ -697,9 +603,6 @@
          * execute une requete
          */
         function execute(R) {
-            const div = document.getElementById("reponse")
-            div.removeChild(div.lastChild);
-            print("> "+R.raw+";", "requete")
             R.index = 0
             const firstKeyword = {
                 "SHOW": show,
@@ -791,6 +694,26 @@
             }
             return false;
         }
+        
+        function checkDate(value){
+            const regExp = /^([0-9]{4})-([0-1][0-9])-([0-2][0-9])$/
+            if (regExp.test(value)) {
+                const date = value.match(regExp)
+                if (date[1] < 1000) {return false}
+                if (date[2] > 12) {return false}
+                if ([1, 3, 5, 7, 8, 10, 12].indexOf(date[3])) {
+                    if (date[3] > 31) {return false}
+                } else if (date[3] == 2) {
+                    if (date[3] > 29) {return false}
+                } else {
+                    if (date[3] > 30) {return false}
+                }
+                return true
+            } else {
+                return false
+            }
+        }
+        
         
         /*
          * traite le mot-clé mysql 'SHOW'
@@ -1233,26 +1156,13 @@
             const table = currentDatabase.tables[nom]
             try {
                 const token = getNextToken(R)
-                const L = token.nom.split(',').map(elem => elem.split(" "))
+                const L = token.nom.trim().split(',').map(elem => elem.trim().split(" "))
                 L.forEach(elem => {
                     if (elem.length != 2) {
                         throw `Erreur lors de la lecture des tables : ${elem.join(" ")}`
                     }
                     /* vérification du type */
-                    const regExpAvecParentheses = /^([a-z]+)\([0-9]*\)$/i
-                    const regExpSansParentheses = /^[a-z]+$/i
-                    if (regExpSansParentheses.test(elem[1])) {
-                        type = elem[1]
-                    } else if (regExpAvecParentheses.test(elem[1])) {
-                        type = elem[1].match(regExpAvecParentheses)[1]
-                    } else {
-                        throw `Erreur lors de la lecture du type de la table : ${elem[0]}`
-                    }
-                    if (["CHAR", "VARCHAR", "SMALLINT", "INT", "INTEGER", "FLOAT", "DECIMAL", "DATE"].indexOf(type.toUpperCase())<0) {
-                        throw `Le type « ${type} » n'est pas reconnu.`
-                    }
-                    /* création de la colonne */
-                    table.addColumn(elem[0], type)
+                    table.addColumn(elem[0], elem[1].toUpperCase())
                 })
                 if (existNextToken(R)) {
                     throw `Le mot-clé « ${getNameFromToken(R)} » est innatendu`
