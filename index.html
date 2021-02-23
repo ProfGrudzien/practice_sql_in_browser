@@ -17,6 +17,7 @@
             margin: 2px auto;
             padding: 4px;
             overflow: scroll;
+            white-space: nowrap;
         }
         p {
             white-space: pre;
@@ -30,6 +31,7 @@
             outline: none;
             font-family: monospace;
             font-size: 12pt;
+            width: 2000px;
         }
         label {
             color: #00ff00;
@@ -164,6 +166,7 @@
                 this.combinaisons = []
                 this.limite = null
                 this.offset = 0
+                this.valueslist = []
             }
         }
 
@@ -557,7 +560,7 @@
                     if (table.columns[col.nom]) {
                         return table.columns[col.nom]
                     } else {
-                        throw `La colonne « ${nom} » est introuvable dans la table ${col.table}.`
+                        throw `La colonne « ${col.nom} » est introuvable dans la table ${col.table}.`
                     }
                 } else {
                     throw `La table « ${col.table} » n'est pas dans la liste des tables sélectionnées.`
@@ -569,7 +572,7 @@
                 } else if (liste.length == 2) {
                     throw `Une colonne « ${col.nom} » est présente dans plusieurs tables sélectionnées.`
                 } else {
-                    throw `La colonne « ${col.nom} » est introuvable dans la liste des tables sélectionnées.`
+                    throw `La colonne « ${col.nom} » est introuvable dans ${tablesList.length > 1 ? "la liste des tables sélectionnées" : "la table sélectionnée"}.`
                 }
             }
         }
@@ -611,6 +614,7 @@
                 "DESCRIBE": describe,
                 "SELECT": select,
                 "CREATE": create,
+                "INSERT": insert,
             }
             applyNextKeyword(R, firstKeyword)
         }
@@ -1161,7 +1165,6 @@
                     if (elem.length != 2) {
                         throw `Erreur lors de la lecture des tables : ${elem.join(" ")}`
                     }
-                    /* vérification du type */
                     table.addColumn(elem[0], elem[1].toUpperCase())
                 })
                 if (existNextToken(R)) {
@@ -1172,6 +1175,54 @@
                 throw e
             }
             print(`La table « ${nom} » a bien été créée.`)
+        }
+        
+        /*
+         * traite le mot-clé mysql 'INSERT'
+         */
+        function insert(R) {
+            if (!currentDatabase) {
+                throw "Aucune base de données n'est sélectionnée."
+            }
+            if (getNextToken(R).nom.toUpperCase() != "INTO") {
+                throw "Le mot clé « INTO » est attendu après le mot clé « INSERT »."
+            }
+            const token = getNextToken(R)
+            R.table = findTable(token.nom)
+            exploreInsertColumns(R)
+            exploreInsertValues(R)
+            applyInsert(R)
+        }
+        
+        /*
+         * recherche les colonnes pour une requête INSERT
+         */
+        function exploreInsertColumns(R) {
+            const next = getNextToken(R)
+            if (next.nom.toUpperCase() == "VALUES") {
+                for (const col in R.table) {
+                    R.columnsList.push(col)
+                }
+            } else if (next.delimiteur == "parentheses") {
+                const listeNoms = next.nom.split(',')
+                listeNoms.forEach(nom => R.columnsList.push(findColumn({nom: nom.trim()}, [R.table])))
+            } else {
+                throw "Erreur lors de la lecture du nom des colonnes."
+            }
+        }
+        
+        /*
+         * recherche les valeurs pour une requête INSERT
+         */
+        function exploreInsertValues(R) {
+        
+        }
+        
+        /*
+         * enregistre les données suite à une requête INSERT
+         */
+        function applyInsert(R) {
+        
         }
         
         /*
@@ -1293,4 +1344,4 @@
     </script>
 </body>
 </html>
-
+l
