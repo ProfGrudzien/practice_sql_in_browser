@@ -31,13 +31,16 @@
             outline: none;
             font-family: monospace;
             font-size: 12pt;
-            width: 2000px;
+            min-width: 570px;
         }
         label {
             color: #00ff00;
         }
         .vert {
             color: #00ff00;
+        }
+        .vert:before {
+            content: ">";
         }
         .rouge {
             color: #ff8888;
@@ -55,8 +58,8 @@
         /* ENVOYER LA REQUETE */
         var raw = ""
         const divConsole = document.getElementById("console")
-        divConsole.addEventListener("click", setFocusToPrompt)
         divConsole.addEventListener("change", handleChange)
+        divConsole.addEventListener("keypress", expandInput)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
         prompt()
         const databases = []
@@ -103,10 +106,6 @@
                     throw `La table « ${this.nom} » ne comporte pas de colonnes « ${colonneInconnue.join(', ')} ».`
                 } else {
                     this.data.push(element)
-                    for (const key in element) {
-                        const newLength = element[key].toString().length
-                        const column = this.columns[key]
-                    }
                 }
             }
         }
@@ -166,7 +165,7 @@
                 this.combinaisons = []
                 this.limite = null
                 this.offset = 0
-                this.valueslist = []
+                this.valuesList = []
             }
         }
 
@@ -220,6 +219,20 @@
         }
 
         /*
+         * retourne vrai si la liste à deux valeurs identiques.
+         */
+        function doublons(L) {
+            for (let i=1; i<L.length; i++) {
+                for (let j=0; j<i; j++) {
+                    if (L[i] == L[j]) {
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+
+        /*
          * ajoute autant d'espace que necessaire pour obtenir une chaine de bonne longueur.
          * si le texte est trop long, retourne le texte tel quel.
          */
@@ -230,6 +243,7 @@
                 return texte
             }
         }
+        
         /*
          * affiche une ligne dans le cadre 'réponse'
          */
@@ -249,6 +263,14 @@
         }
         
         /*
+         * Augmente la largeur de l'input au moment de la frappe
+         */
+        function expandInput(event) {
+            const input = divConsole.lastChild
+            input.style.width =  ((input.value.length + 1) * 10) + 'px';
+        }
+        
+        /*
          * affiche un prompt et une barre clignotante
          */
         function prompt() {
@@ -260,6 +282,7 @@
             divConsole.appendChild(label)
             divConsole.appendChild(input)
             divConsole.scrollTop = divConsole.scrollHeight;
+            divConsole.scrollLeft = 0;
             input.focus()
         }
         
@@ -316,14 +339,25 @@
          * Retourne une erreur si le caractère ; n'est pas trouvé
          */
         function searchParentheses(R) {
+            var inString = false;
+            var delimiteur = null;
             var nombreParenthese = 1
             R.index += 1
             var txt = ""
             while (R.raw[R.index] && nombreParenthese > 0) {
-                if (R.raw[R.index] == ")") {
-                    nombreParenthese += -1
-                } else if (R.raw[R.index] == "(") {
-                    nombreParenthese += 1
+                if (inString) {
+                    if (R.raw[R.index]==delimiteur) {
+                        inString = false;
+                    }
+                } else {
+                    if (R.raw[R.index] == '"' || R.raw[R.index] == "'") {
+                        inString = true
+                        delimiteur = R.raw[R.index]
+                    } else if (R.raw[R.index] == ")") {
+                        nombreParenthese += -1
+                    } else if (R.raw[R.index] == "(") {
+                        nombreParenthese += 1
+                    }
                 }
                 if (nombreParenthese > 0) {
                     txt += R.raw[R.index]
@@ -347,12 +381,20 @@
                 nb += R.raw[R.index]
                 R.index += 1
             }
-            if (nb.split('.').length < 2 && nb.split('-').length == 1) {
-                R.tokensList.push(new Token(nb, "number"))
-            } else if (nb.split('-').length == 3 && nb.split('.').length == 1) {
+            if (nb.split('-').length == 3) {
+                if (nb.indexOf(".")>-1) {
+                    throw `Erreur lors de la lecture d'une date`
+                }
                 R.tokensList.push(new Token(nb, "date"))
+            } else if (nb.indexOf("-") == -1) {
+                if (nb.indexOf(".") == -1) {
+                    R.tokensList.push(new Token(parseInt(nb), "entier"))
+                }
+                if (nb.split('.').length == 2) {
+                    R.tokensList.push(new Token(parseFloat(nb), "decimal"))
+                }
             } else {
-                throw "Une erreur lors de la recherche d'une valeur numérique"
+                throw "Une erreur lors de la lecture d'une date ou d'une valeur numérique"
             }
         }
 
@@ -367,6 +409,10 @@
                 } else {
                     throw "Caractère « ! » inattendu."
                 }
+            }
+            if (R.raw[R.index] == '=') {
+                R.tokensList.push(new Token("=", "operateur"))
+                R.index += 1
             }
             if (R.raw[R.index] == '<') {
                 if (R.raw[R.index + 1] && R.raw[R.index + 1] == '>') {
@@ -404,6 +450,7 @@
                 "!": getOperateur,
                 "<": getOperateur,
                 ">": getOperateur,
+                "=": getOperateur,
                 "0": searchNumber,
                 "1": searchNumber,
                 "2": searchNumber,
@@ -442,7 +489,7 @@
         
         /*
          * Change l'input en une div.
-         * Si la requête fini bien par un ; lance l''interpreter
+         * Si la requête fini bien par un ; lance l'interpreter
          */
         function handleChange(event) {
             event.preventDefault()
@@ -452,7 +499,7 @@
             divConsole.removeChild(divConsole.lastChild)
             const p = document.createElement("p")
             p.className = "vert"
-            p.textContent = ">" + text
+            p.textContent = text
             divConsole.appendChild(p)
             if (text[text.length - 1] == ";") {
                 interpreter(raw)
@@ -964,7 +1011,7 @@
         function checkWhere(R) {
             R.whereList.forEach(e => {
                 if (e.A.delimiteur) {
-                    if (['quotes','number','date'].indexOf(e.A.delimiteur) == -1) {
+                    if (['quotes', 'entier', 'decimal', 'date'].indexOf(e.A.delimiteur) == -1) {
                         throw `La paramètre « ${e.A.nom} » est inattendu`
                     }
                 } else {
@@ -972,7 +1019,7 @@
                 }
                 if (e.binaire) {
                     if (e.B.delimiteur) {
-                        if (['quotes','number','date'].indexOf(e.B.delimiteur) == -1) {
+                        if (['quotes', 'entier', 'decimal', 'date'].indexOf(e.B.delimiteur) == -1) {
                             throw `La paramètre « ${e.B.nom} » est inattendu`
                         }
                     } else {
@@ -1200,14 +1247,18 @@
         function exploreInsertColumns(R) {
             const next = getNextToken(R)
             if (next.nom.toUpperCase() == "VALUES") {
-                for (const col in R.table) {
+                for (const col in R.table.columns) {
                     R.columnsList.push(col)
                 }
+                R.index = R.index - 1
             } else if (next.delimiteur == "parentheses") {
                 const listeNoms = next.nom.split(',')
                 listeNoms.forEach(nom => R.columnsList.push(findColumn({nom: nom.trim()}, [R.table])))
             } else {
                 throw "Erreur lors de la lecture du nom des colonnes."
+            }
+            if (doublons(R.columnsList)) {
+                throw "La liste des noms des colonnes contient un ou plusieurs doublons."
             }
         }
         
@@ -1215,14 +1266,43 @@
          * recherche les valeurs pour une requête INSERT
          */
         function exploreInsertValues(R) {
-        
+            const token = getNextToken(R)
+            if (token.nom.toUpperCase() != "VALUES") {
+                throw `Le mot clé « VALUES » est attendu.`
+            }
+            var continuer = true;
+            while (continuer) {
+                const next = getNextToken(R)
+                const valeurs = new Request(next.nom)
+                const element = []
+                prepare(valeurs)
+                for (let i=0; i<valeurs.tokensList.length; i++) {
+                    const token = valeurs.tokensList[i]
+                    if (i%2 == 0) {
+                        element.push(token.nom)
+                    } else if (token.nom != ',') {
+                        throw `Erreur lors de la lecture des données`
+                    }
+                }
+                if (element.length != R.columnsList.length) {
+                    throw `Le nombre de valeurs n'est pas égal au nombre de colonnes annoncées.`
+                }
+                R.valuesList.push(element)
+                if (existNextToken(R)) {
+                    if (!getNextToken(R).nom == ",") {
+                        throw `Erreur lors de la lecture des valeurs.`
+                    }
+                } else {
+                    continuer = false;
+                }
+            }
         }
         
         /*
          * enregistre les données suite à une requête INSERT
          */
         function applyInsert(R) {
-        
+            console.log(R.valuesList)
         }
         
         /*
@@ -1344,4 +1424,3 @@
     </script>
 </body>
 </html>
-l
