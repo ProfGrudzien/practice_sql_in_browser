@@ -20,9 +20,9 @@ Les prochaines étapes sont :
 
 + ajout du mot clé OR pour la close WHERE
 + ajout des parenthèses dans la close WHERE
-+ création / suppression d'une base de données
-+ création / suppression d'une table (simple dans un premier temps)
-+ ajout / modification / suppression d'enregistrements
++ suppression d'une base de données
++ suppression d'une table
++ modification / suppression d'enregistrements
 + déclaration des clés étrangères
 + possibilité d'importer un fichier contenant des requêtes SQL
 + possibilité de télécharger une base de données sous la forme d'un fichier texte contenant les requêtes necessaires.
