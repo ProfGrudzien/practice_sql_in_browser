@@ -20,7 +20,6 @@ Les prochaines étapes sont :
 
 + ajout du mot clé OR pour la close WHERE
 + ajout des parenthèses dans la close WHERE
-+ suppression d'une base de données
 + suppression d'une table
 + modification / suppression d'enregistrements
 + déclaration des clés étrangères
