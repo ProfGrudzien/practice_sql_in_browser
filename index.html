@@ -72,7 +72,7 @@
             }
             addTable(nom) {
                 if (this.tables[nom]) {
-                    throw `La base « ${this.nom} » comporte déjà une table nomée « ${nom} »`
+                    throw `La base « ${this.nom} » comporte déjà une table nommée « ${nom} »`
                 } else {
                     this.tables[nom] = new Table(nom, this)
                 }
@@ -95,7 +95,7 @@
             }
             addColumn(nom, type) {
                 if (this.columns[nom]) {
-                    throw `La table « ${this.nom} » comporte déjà une colonne nomée « ${nom} ».`
+                    throw `La table « ${this.nom} » comporte déjà une colonne nommée « ${nom} ».`
                 }
                 this.columns[nom] = new Column(nom, type, this)
             }
@@ -609,7 +609,7 @@
             if (dbList.length) {
                 return dbList[0]
             } else {
-                throw `Erreur, il n'y a aucune base de données nomée « ${nom} ».`
+                throw `Erreur, il n'y a aucune base de données nommée « ${nom} ».`
             }
         }
         
@@ -621,7 +621,7 @@
                 if (currentDatabase.tables[nom]) {
                     return currentDatabase.tables[nom]
                 } else {
-                    throw `Erreur, il n'y a pas de table nomée « ${nom} » dans la base de données « ${currentDatabase.nom} ».`
+                    throw `Erreur, il n'y a pas de table nommée « ${nom} » dans la base de données « ${currentDatabase.nom} ».`
                 }
             } else {
                 throw "Aucune base de données n'est sélectionnée."
@@ -1294,11 +1294,14 @@
                 if (!ifExists) {
                     throw `Il n'existe aucune base de données nommée « ${token.nom} ».`
                 }
+            } else if (existNextToken(R)) {
+                throw "La requête est incorrecte."
             } else {
                 databases.splice(dbIndex,1)
                 if (currentDatabase && currentDatabase.nom == token.nom) {
                     currentDatabase = null
                 }
+                print(`La base de données « ${token.nom} » a bien été supprimée.`)
             }
         }
 
@@ -1306,7 +1309,13 @@
          * traite la commande mysql 'DROP TABLE'
          */
         function dropTable(R) {
-        
+            const token = getNextToken(R)
+            if (existNextToken(R)) {
+                throw "La requête est incorrecte."
+            } 
+            const table = findTable(token.nom)
+            currentDatabase.removeTable(token.nom)
+            print(`La table « ${token.nom} » a bien été supprimée.`)
         }
 
         /*
