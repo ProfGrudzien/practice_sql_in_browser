@@ -59,6 +59,7 @@
         var raw = ""
         const divConsole = document.getElementById("console")
         divConsole.addEventListener("change", handleChange)
+        divConsole.addEventListener("click", handleClick)
         divConsole.addEventListener("keypress", expandInput)
         print('Base de données en mode « Bac à sable » prête !', "bleu")
         prompt()
@@ -98,43 +99,71 @@
                 }
                 this.columns[nom] = new Column(nom, type, this)
             }
-            addData(element) {
+            checkData(element) {
                 const colonneInconnue = Object.keys(element).filter(key => !this.columns[key])
                 if (colonneInconnue.length == 1) {
                     throw `La table « ${this.nom} » ne comporte pas de colonne « ${colonneInconnue[0]} ».`
                 } else if (colonneInconnue.length > 1) {
                     throw `La table « ${this.nom} » ne comporte pas de colonnes « ${colonneInconnue.join(', ')} ».`
-                } else {
-                    this.data.push(element)
                 }
+                Object.keys(element).forEach(key => {
+                    const type = this.columns[key].type
+                    const longueur = this.columns[key].longueur
+                    const valeur = element[key]
+                    if (type == "SMALLINT") {
+                        if (!is_int(valeur) || valeur > 32737 || valeur <-32768) {
+                            throw `La valeur « ${valeur} » n'est pas du type « SMALLINT »`
+                        }
+                    }
+                    if (type == "INT") {
+                        if (!is_int(valeur) || valeur > 2147483647 || valeur <-2147483648) {
+                            throw `La valeur « ${valeur} » n'est pas du type « INT »`
+                        }
+                    }
+                    if (type == "CHAR") {
+                        if (valeur.length != longueur) {
+                            throw `La valeur « ${valeur} » n'est pas du type « CHAR(${longueur}) »`
+                        }
+                    }
+                    if (type == "VARCHAR") {
+                        if (valeur.length > longueur) {
+                            throw `La valeur « ${valeur} » n'est pas du type « VARCHAR(${longueur}) »`
+                        }
+                    }
+                    if (type == "DATE") {
+                        if (!checkDate(valeur)) {
+                            throw `La valeur « ${valeur} » n'est pas du type « DATE »`
+                        }
+                    }
+                })
+            }
+            addData(element) {
+                this.data.push(element)
             }
         }
         
         class Column {
             constructor(nom, type, table) {
-                const dicoTypes = {
-                    "SMALLINT" : (l) => {elem => {elem >= -32768 && elem <= 32767}},
-                    "INT" : (l) => {elem => {elem >= -2147483648 && elem <= 2147483647}},
-                    "CHAR" : (l) => {l ? elem => {elem.length == l} : dicoTypes["CHAR"](1)},
-                    "VARCHAR" : (l) => {l ? elem => {elem.length <= l} : dicoTypes["VARCHAR"](255)},
-                    "DATE" : (l) => { if (l) { throw "Le type « DATE » n'accepte pas de paramètres." } else { return checkDate }}
-                }
+                const typesList = ["SMALLINT", "INT", "CHAR", "VARCHAR", "DATE"]
+                const defaultLengths = ["", "", 1, 255, null]
                 const regExp = /^([a-z]+)(\(([0-9])*\))?$/i
                 const matchType = type.match(regExp)
                 const nomType = matchType[1] 
-                if (!dicoTypes[nomType]) {
+                if (typesList.indexOf(nomType) == -1) {
                     throw `Le type  « ${type} » n'est pas reconnu.`
                 }
-                this.type = type
-                this.longueur = matchType[3]
-                this.controleType = dicoTypes[nomType](this.longueur)
+                this.type = nomType
+                if (nomType == "DATE" && matchType[3]) {
+                    throw `Le type  « DATE » n'attends pas de complément.`
+                }
+                this.longueur = matchType[3] ? matchType[3] : defaultLengths[typesList.indexOf(nomType)]
                 this.nom = nom
                 this.table = table
             }
         }
 
         /*
-         * Un fragment de la requete ayant un sens propre
+         * Un fragment de la requête ayant un sens propre
          */
         class Token {
             constructor(nom, delimiteur) {
@@ -144,7 +173,7 @@
         }
 
         /*
-         * Contient toutes les informations pour controler et executer la requette.
+         * Contient toutes les informations pour contrôler et exécuter la requête.
          */
         class Request {
             constructor(raw) {
@@ -166,6 +195,7 @@
                 this.limite = null
                 this.offset = 0
                 this.valuesList = []
+                this.updateList = []
             }
         }
 
@@ -233,7 +263,7 @@
         }
 
         /*
-         * ajoute autant d'espace que necessaire pour obtenir une chaine de bonne longueur.
+         * ajoute autant d'espace que nécessaire pour obtenir une chaîne de bonne longueur.
          * si le texte est trop long, retourne le texte tel quel.
          */
         function expandText(texte, longueur) {
@@ -254,14 +284,7 @@
             divConsole.appendChild(p)
             divConsole.scrollTop = divConsole.scrollHeight;
         }
-        
-        /*
-         * Donne le focus au prompt
-         */
-        function setFocusToPrompt(event) {
-            divConsole.lastChild.focus()
-        }
-        
+       
         /*
          * Augmente la largeur de l'input au moment de la frappe
          */
@@ -294,7 +317,7 @@
             for (i=0; i<entete.length; i++) {
                 largeurs.push(entete[i].toString().length)
                 for (j=0; j<data.length; j++) {
-                    if (largeurs[i] < data[j][i].toString().length) {
+                    if (data[j][i] && largeurs[i] < data[j][i].toString().length) {
                         largeurs[i] = data[j][i].toString().length
                     }
                 }
@@ -316,7 +339,7 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `raw` à la recherche d'un ; à partir de la position `index`
+         * Parcours la chaîne de caractère `raw` à la recherche d'un ; à partir de la position `index`
          * Retourne une erreur si le caractère ; n'est pas trouvé
          */
         function searchString(R, delimiteur) {
@@ -335,7 +358,7 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `raw` à la recherche de parenthèse à partir de la position `index`
+         * Parcours la chaîne de caractère `raw` à la recherche de parenthèse à partir de la position `index`
          * Retourne une erreur si le caractère ; n'est pas trouvé
          */
         function searchParentheses(R) {
@@ -373,7 +396,7 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `raw` à la recherche d'un nombre
+         * Parcours la chaîne de caractère `raw` à la recherche d'un nombre
          */
         function searchNumber(R) {
             var nb = ""
@@ -399,7 +422,7 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `raw` à la recherche d'un opérateur de comparaison
+         * Parcours la chaîne de caractère `raw` à la recherche d'un opérateur de comparaison
          */
         function getOperateur(R) {
             if (R.raw[R.index] == '!') {
@@ -438,7 +461,7 @@
         }
 
         /* 
-         * Parcours la chaine de caractère `sql` de la requête `R` pour la découper en "tokens"
+         * Parcours la chaîne de caractère `sql` de la requête `R` pour la découper en "tokens"
          */
         function tokenize(R) {
             const specialChar = {
@@ -477,8 +500,8 @@
         }
 
         /*
-         * Parcours le texte saisi par l'utilisateur à la recherche de requettes
-         * et les contrôle puis les execute au fur et à mesure.
+         * Parcours le texte saisi par l'utilisateur à la recherche de requêtes
+         * et les contrôle puis les exécute au fur et à mesure.
          */
         function parseSQL(raw) {
             var R = new Request(raw.substring(0, raw.length-1))
@@ -489,7 +512,7 @@
         
         /*
          * Change l'input en une div.
-         * Si la requête fini bien par un ; lance l'interpreter
+         * Si la requête fini bien par un ; lance l’interpréteur
          */
         function handleChange(event) {
             event.preventDefault()
@@ -506,6 +529,15 @@
                 raw = ""
             } else {
                 prompt()
+            }
+        }
+        
+        /*
+         * Donne le focus à l'input
+         */
+        function handleClick(event) {
+            if (event.target.tagName == 'DIV') {
+                divConsole.lastChild.focus()
             }
         }
         
@@ -662,6 +694,8 @@
                 "SELECT": select,
                 "CREATE": create,
                 "INSERT": insert,
+                "UPDATE": update,
+                "DROP": drop,
             }
             applyNextKeyword(R, firstKeyword)
         }
@@ -817,7 +851,13 @@
             const nom = getNameFromToken(R)
             R.index += 1
             const table = findTable(nom)
-            const infos = Object.values(table.columns).map(lbl => [lbl.nom, lbl.type])
+            const infos = Object.values(table.columns).map(lbl => {
+                if (["INT", "SMALLINT", "DATE"].indexOf(lbl.type)>-1) {
+                    return [lbl.nom, lbl.type]
+                } else {
+                    return [lbl.nom, `${lbl.type}(${lbl.longueur})`]
+                }
+            })
             const largeurs = [Math.max(...infos.map(L => L[0].length)),
                               Math.max(...infos.map(L => L[1].length))]
             if (existNextToken(R)) {
@@ -899,7 +939,7 @@
         }
         
         /*
-         * recherche le nom des sources de données et eventuellement les alias avant de faire un SELECT FROM
+         * recherche le nom des sources de données et éventuellement les alias avant de faire un SELECT FROM
          */
         function exploreTables(R) {
             const token = getNameFromToken(R)
@@ -959,7 +999,7 @@
         }
         
         /*
-         * traite si besoin le mot clé WHERE de la requete SELECT
+         * traite si besoin le mot clé WHERE de la requête SELECT
          */
         function selectWhere(R) {
             if (existNextToken(R)) {
@@ -1006,7 +1046,7 @@
         }
         
         /*
-         * vérifie les paramètres de Where
+         * vérifie les paramètres de WHERE
          */
         function checkWhere(R) {
             R.whereList.forEach(e => {
@@ -1039,7 +1079,7 @@
         }
         
         /*
-         * traite si besoin le mot clé ORDER BY de la requete SELECT
+         * traite si besoin le mot clé ORDER BY de la requête SELECT
          */
         function selectOrderBy(R) {
             if (existNextToken(R)) {
@@ -1223,7 +1263,52 @@
             }
             print(`La table « ${nom} » a bien été créée.`)
         }
+
+        /*
+         * traite le mot-clé mysql 'DROP'
+         */
+        function drop(R) {
+            const nextKeywords = {
+                "DATABASE": dropDatabase,
+                "TABLE": dropTable
+            }
+            applyNextKeyword(R, nextKeywords)
+        }
         
+        /*
+         * traite la commande mysql 'DROP DATABASE'
+         */
+        function dropDatabase(R) {
+            var token = getNextToken(R)
+            var ifExists = false
+            if (token.nom.toUpperCase() == 'IF') {
+                if (getNextToken(R).nom.toUpperCase() == 'EXISTS') {
+                    token = getNextToken(R)
+                    ifExists = true
+                } else {
+                    throw "Le mot clé « EXISTS » est attendu après « DROP DATABASE IF »"
+                }
+            }
+            const dbIndex = databases.findIndex(db => db.nom == token.nom)
+            if (dbIndex == -1) {
+                if (!ifExists) {
+                    throw `Il n'existe aucune base de données nommée « ${token.nom} ».`
+                }
+            } else {
+                databases.splice(dbIndex,1)
+                if (currentDatabase && currentDatabase.nom == token.nom) {
+                    currentDatabase = null
+                }
+            }
+        }
+
+        /*
+         * traite la commande mysql 'DROP TABLE'
+         */
+        function dropTable(R) {
+        
+        }
+
         /*
          * traite le mot-clé mysql 'INSERT'
          */
@@ -1302,11 +1387,88 @@
          * enregistre les données suite à une requête INSERT
          */
         function applyInsert(R) {
-            console.log(R.valuesList)
+            const elements = []
+            const table = R.table
+            for (let i=0; i<R.valuesList.length; i++) {
+                const element = {}
+                for (let j=0; j<R.columnsList.length; j++) {
+                    element[R.columnsList[j].nom] = R.valuesList[i][j]
+                }
+                table.checkData(element)
+                elements.push(element)
+            }
+            elements.forEach(elem => table.addData(elem))
+            if (elements.length == 1) {
+                print(`Ajout d'un enregistrement avec succès.`)
+            } else {
+                print(`Ajout de ${elements.length} enregistrements avec succès.`)
+            }
         }
         
         /*
-         * un exemple de database sur les sériers et acteurs des Emmy Awards 2018
+         * traite le mot-clé mysql 'UPDATE'
+         */
+        function update(R) {
+            if (!currentDatabase) {
+                throw "Aucune base de données n'est sélectionnée."
+            }
+            const token = getNextToken(R)
+            R.table = findTable(token.nom)
+            R.tablesList = [R.table]
+            R.combinaisons = R.table.data.map(elem => {
+                const reponse = {}
+                reponse[R.table.nom] = elem
+                return reponse
+            })
+            exploreUpdatedValues(R)
+            selectWhere(R)
+            applyUpdate(R)
+        }
+        
+        /*
+         * recherche les valeurs pour une requête UPDATE
+         */
+        function exploreUpdatedValues(R) {
+            const token = getNextToken(R)
+            if (token.nom.toUpperCase() != "SET") {
+                throw "Le mot clé « SET » est attendu."
+            }
+            var continuer = true;
+            while (continuer) {
+                const column = findColumn(getNextToken(R), R.tablesList)
+                if (getNextToken(R).nom != "=") {
+                    throw "Le mot clé « = » est attendu."
+                }
+                const valeur = getNextToken(R).nom
+                /* VERIFIER ICI LE TYPE DE valeur */
+                R.updateList.push([column, valeur])
+                if (getNameFromToken != ",") {
+                    continuer = false;
+                }
+            }
+        }
+        
+        /*
+         * enregistre les données suite à une requête UPDATE
+         */
+        function applyUpdate(R) {
+                R.combinaisons.forEach(element => {
+                R.updateList.forEach(update => {
+                    element[R.table.nom][update[0].nom] = update[1]
+                })
+            })
+            if (R.combinaisons.length == 0) {
+                print(`Aucun enregistrement modifié.`)
+            }
+            else if (R.combinaisons.length == 1) {
+                print(`Modification d'un enregistrement avec succès.`)
+            } else {
+                print(`Modification de ${R.combinaisons.length} enregistrements avec succès.`)
+            }
+        }
+        
+        /*
+         * un exemple de database sur les séries et acteurs des Emmy Awards 2018
          */
         const db_emmy = new Database("emmy18")
         db_emmy.addTable("series")
