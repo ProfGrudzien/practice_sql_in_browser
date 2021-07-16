@@ -696,6 +696,7 @@
                 "INSERT": insert,
                 "UPDATE": update,
                 "DROP": drop,
+                "DELETE": deleteSQL,
             }
             applyNextKeyword(R, firstKeyword)
         }
@@ -1461,7 +1462,7 @@
          * enregistre les données suite à une requête UPDATE
          */
         function applyUpdate(R) {
-                R.combinaisons.forEach(element => {
+            R.combinaisons.forEach(element => {
                 R.updateList.forEach(update => {
                     element[R.table.nom][update[0].nom] = update[1]
                 })
@@ -1473,6 +1474,49 @@
                 print(`Modification d'un enregistrement avec succès.`)
             } else {
                 print(`Modification de ${R.combinaisons.length} enregistrements avec succès.`)
+            }
+        }
+        
+        function deleteSQL(R) {
+            if (getNextToken(R).nom.toUpperCase() != 'FROM') {
+                    throw "Le mot clé « FROM » est attendu après « DELETE »"
+            }
+            const token = getNextToken(R)
+            R.table = findTable(token.nom)
+            R.tablesList = [R.table]
+            R.combinaisons = R.table.data.map(elem => {
+                const reponse = {}
+                reponse[R.table.nom] = elem
+                return reponse
+            })
+            if (existNextToken(R)) {
+                if (getNameFromToken(R).toUpperCase() == "WHERE") {
+                    selectWhere(R)
+                    R.combinaisons.forEach(element => {
+                        const index = R.table.data.findIndex(e => e == element[R.table.nom])
+                        R.table.data.splice(index, 1)
+                    })
+                    if (R.combinaisons.length == 0) {
+                        print(`Aucun enregistrement supprimé.`)
+                    }
+                    else if (R.combinaisons.length == 1) {
+                        print(`Suppression d'un enregistrement avec succès.`)
+                    } else {
+                        print(`Suppression de ${R.combinaisons.length} enregistrements avec succès.`)
+                    }
+                } else {
+                    throw "Le mot clé « WHERE » est attendu"
+                }
+            } else {
+                if (R.table.data.length == 0) {
+                    print(`Aucun enregistrement supprimé.`)
+                }
+                else if (R.table.data.length == 1) {
+                    print(`Suppression d'un enregistrement avec succès.`)
+                } else {
+                    print(`Suppression de ${R.table.data.length} enregistrements avec succès.`)
+                }
+                R.table.data = []
             }
         }
         
