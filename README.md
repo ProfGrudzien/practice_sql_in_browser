@@ -18,6 +18,7 @@ Vous pouvez par exemple tester ici https://profgrudzien.github.io/practice_sql_i
 
 Les prochaines étapes sont :
 
++ ajout de données incomplètes lors d'une requête INSERT INTO
 + ajout du mot clé OR pour la close WHERE
 + ajout des parenthèses dans la close WHERE
 + modification d'une table
